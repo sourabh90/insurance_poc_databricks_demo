@@ -1,0 +1,17 @@
+resources:
+  jobs:
+    insurance_poc_databricks_demo_setup:
+      name: "[${bundle.target}] insurance_poc - Job - 1. Setup"
+      tasks:
+        - task_key: create_catalogs_schemas_volumes
+          notebook_task:
+            notebook_path: ../../src/notebooks/setup_catalogs.py
+            base_parameters:
+              bronze_catalog: ${var.bronze_catalog}
+              silver_catalog: ${var.silver_catalog}
+              gold_catalog:   ${var.gold_catalog}
+              bronze_schema:  ${var.bronze_schema}
+              silver_schema:  ${var.silver_schema}
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

@@ -1,0 +1,44 @@
+bundle:
+  name: insurance_poc_databricks_demo
+
+include:
+  - resources/**/*.yml
+
+variables:
+  bronze_catalog:
+    default: "bronze_dev"
+  silver_catalog:
+    default: "silver_dev"
+  gold_catalog:
+    default: "gold_dev"
+  bronze_schema:
+    default: "raw_claims"
+  silver_schema:
+    default: "refined_claims"
+  warehouse_id:
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      profile: personal
+    variables:
+      bronze_catalog: "bronze_dev"
+      silver_catalog: "silver_dev"
+      gold_catalog:   "gold_dev"
+      bronze_schema:  "raw_claims"
+      silver_schema:  "refined_claims"
+
+  prod:
+    mode: production
+    workspace:
+      profile: personal
+    variables:
+      bronze_catalog: "bronze_prod"
+      silver_catalog: "silver_prod"
+      gold_catalog:   "gold_prod"
+      bronze_schema:  "raw_claims"
+      silver_schema:  "refined_claims"

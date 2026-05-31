@@ -1,0 +1,58 @@
+resources:
+  jobs:
+    insurance_poc_databricks_demo_job:
+      name: "[${bundle.target}] insurance_poc - Job - 3. Main Orchestration"
+      tasks:
+        - task_key: landing_to_bronze
+          max_retries: 1
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_landing_to_bronze.id}
+            full_refresh: false
+
+        - task_key: bronze_to_silver
+          max_retries: 1
+          depends_on:
+            - task_key: landing_to_bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_bronze_to_silver.id}
+            full_refresh: false
+
+        # Step 1 of gold loading: dimension/reference tables first
+        - task_key: load_gold_dimensions
+          max_retries: 1
+          depends_on:
+            - task_key: bronze_to_silver
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_gold_dimensions.id}
+            full_refresh: false
+
+        # Step 2: fact tables reference dimension keys — load after dimensions
+        - task_key: load_gold_facts
+          max_retries: 1
+          depends_on:
+            - task_key: load_gold_dimensions
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_gold_facts.id}
+            full_refresh: false
+
+        # Step 3: features — sequential to respect single active pipeline limit on this workspace tier
+        - task_key: load_gold_features
+          max_retries: 1
+          depends_on:
+            - task_key: load_gold_facts
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_gold_features.id}
+            full_refresh: false
+
+        # Step 4: summary runs after features (fully sequential — workspace tier allows 1 active pipeline)
+        - task_key: load_gold_summary
+          max_retries: 1
+          depends_on:
+            - task_key: load_gold_features
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.insurance_poc_gold_summary.id}
+            full_refresh: false
+
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

@@ -1,0 +1,18 @@
+resources:
+  jobs:
+    insurance_poc_databricks_demo_cleanup:
+      name: "[${bundle.target}] insurance_poc - Job - 4. Cleanup POC Data"
+      tasks:
+        - task_key: cleanup
+          notebook_task:
+            notebook_path: ../../src/notebooks/cleanup.py
+            base_parameters:
+              bronze_catalog: ${var.bronze_catalog}
+              silver_catalog: ${var.silver_catalog}
+              gold_catalog:   ${var.gold_catalog}
+              bronze_schema:  ${var.bronze_schema}
+              silver_schema:  ${var.silver_schema}
+              drop_catalogs:  "no"
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

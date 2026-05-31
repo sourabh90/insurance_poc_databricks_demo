@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    insurance_poc_gold_facts:
+      name: "[${bundle.target}] insurance_poc - Pipeline - Load Gold Facts"
+      catalog: ${var.gold_catalog}
+      schema:  facts
+      libraries:
+        - notebook:
+            path: ../../src/pipelines/gold_facts.py
+      configuration:
+        silver_catalog: ${var.silver_catalog}
+        silver_schema:  ${var.silver_schema}
+      continuous: false
+      serverless: true

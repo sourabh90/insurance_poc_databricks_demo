@@ -1,0 +1,6 @@
+resources:
+  apps:
+    insurance_poc_databricks_demo_app:
+      name: "ins-claims-demo-${bundle.target}"
+      description: "insurance_poc_databricks_demo Databricks App"
+      source_code_path: ../../src/app

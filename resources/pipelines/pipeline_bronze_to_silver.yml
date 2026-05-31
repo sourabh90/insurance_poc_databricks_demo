@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    insurance_poc_bronze_to_silver:
+      name: "[${bundle.target}] insurance_poc - Pipeline - Bronze to Silver"
+      catalog: ${var.silver_catalog}
+      schema:  ${var.silver_schema}
+      libraries:
+        - notebook:
+            path: ../../src/pipelines/bronze_to_silver.py
+      configuration:
+        bronze_catalog: ${var.bronze_catalog}
+        bronze_schema:  ${var.bronze_schema}
+      continuous: false
+      serverless: true

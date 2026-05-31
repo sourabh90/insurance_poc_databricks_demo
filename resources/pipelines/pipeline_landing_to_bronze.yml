@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    insurance_poc_landing_to_bronze:
+      name: "[${bundle.target}] insurance_poc - Pipeline - Landing to Bronze"
+      catalog: ${var.bronze_catalog}
+      schema:  ${var.bronze_schema}
+      libraries:
+        - notebook:
+            path: ../../src/pipelines/landing_to_bronze.py
+      configuration:
+        bronze_catalog: ${var.bronze_catalog}
+        bronze_schema:  ${var.bronze_schema}
+      continuous: false
+      serverless: true

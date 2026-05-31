@@ -1,0 +1,11 @@
+resources:
+  dashboards:
+    insurance_poc_databricks_demo_dashboard:
+      display_name: "[${bundle.target}] insurance_poc - Dashboard - Claims Analytics"
+      file_path: ../../src/dashboards/insurance_poc_databricks_demo.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.gold_catalog}
+      dataset_schema: summary
+      permissions:
+        - level: CAN_RUN
+          group_name: "users"

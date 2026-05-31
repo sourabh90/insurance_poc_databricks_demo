@@ -1,0 +1,14 @@
+resources:
+  jobs:
+    insurance_poc_databricks_demo_data_gen:
+      name: "[${bundle.target}] insurance_poc - Job - 2. Generate Synthetic Data"
+      tasks:
+        - task_key: generate_synthetic_data
+          notebook_task:
+            notebook_path: ../../src/notebooks/generate_synthetic_data.py
+            base_parameters:
+              bronze_catalog: ${var.bronze_catalog}
+              bronze_schema:  ${var.bronze_schema}
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

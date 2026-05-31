@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    insurance_poc_gold_summary:
+      name: "[${bundle.target}] insurance_poc - Pipeline - Load Gold Summary"
+      catalog: ${var.gold_catalog}
+      schema:  summary
+      libraries:
+        - notebook:
+            path: ../../src/pipelines/gold_summary.py
+      configuration:
+        silver_catalog: ${var.silver_catalog}
+        silver_schema:  ${var.silver_schema}
+      continuous: false
+      serverless: true

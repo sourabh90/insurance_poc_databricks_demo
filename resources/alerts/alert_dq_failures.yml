@@ -1,0 +1,32 @@
+resources:
+  alerts:
+    insurance_poc_dq_failures_alert:
+      display_name: "[${bundle.target}] insurance_poc - Alert - DQ Failures in Quarantine"
+      warehouse_id: ${var.warehouse_id}
+
+      query_text: |
+        SELECT COUNT(*) AS failed_records
+        FROM ${var.silver_catalog}.${var.silver_schema}.quarantine
+        WHERE quarantined_at >= CURRENT_TIMESTAMP() - INTERVAL 24 HOURS
+
+      evaluation:
+        comparison_operator: 'GREATER_THAN'
+        source:
+          name: 'failed_records'
+          display: 'failed_records'
+        threshold:
+          value:
+            double_value: 0
+        notification:
+          notify_on_ok: false
+          subscriptions:
+            - user_email: mona.sourabh17@gmail.com
+
+      schedule:
+        pause_status: UNPAUSED
+        quartz_cron_schedule: '0 0 8 * * ?'
+        timezone_id: 'Europe/London'
+
+      permissions:
+        - level: CAN_RUN
+          group_name: "users"

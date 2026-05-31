@@ -1,0 +1,11 @@
+command:
+  - python
+  - app.py
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: ""
+  - name: DATABRICKS_CATALOG
+    value: "workspace"
+  - name: DATABRICKS_SCHEMA
+    value: "default"
