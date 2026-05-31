@@ -26,11 +26,13 @@ gold_catalog   = dbutils.widgets.get("gold_catalog")
 bronze_schema  = dbutils.widgets.get("bronze_schema")
 silver_schema  = dbutils.widgets.get("silver_schema")
 
-GOLD_SCHEMAS = ["dimensions", "facts", "features", "summary"]
+GOLD_SCHEMAS      = ["dimensions", "facts", "features", "summary"]
+REFERENCE_SCHEMA  = "raw_reference"
 
-print(f"Bronze : {bronze_catalog}.{bronze_schema}")
-print(f"Silver : {silver_catalog}.{silver_schema}")
-print(f"Gold   : {gold_catalog}.{{{', '.join(GOLD_SCHEMAS)}}}")
+print(f"Bronze    : {bronze_catalog}.{bronze_schema}")
+print(f"Reference : {bronze_catalog}.{REFERENCE_SCHEMA}")
+print(f"Silver    : {silver_catalog}.{silver_schema}")
+print(f"Gold      : {gold_catalog}.{{{', '.join(GOLD_SCHEMAS)}}}")
 
 # COMMAND ----------
 # Create catalogs
@@ -44,6 +46,9 @@ for catalog in [bronze_catalog, silver_catalog, gold_catalog]:
 
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{bronze_catalog}`.`{bronze_schema}`")
 print(f"✓ schema: {bronze_catalog}.{bronze_schema}")
+
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{bronze_catalog}`.`{REFERENCE_SCHEMA}`")
+print(f"✓ schema: {bronze_catalog}.{REFERENCE_SCHEMA}")
 
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{silver_catalog}`.`{silver_schema}`")
 print(f"✓ schema: {silver_catalog}.{silver_schema}")
@@ -73,3 +78,6 @@ for t in ["policyholders", "vehicles", "policies", "claims", "incidents", "claim
 suffix = bronze_catalog.split("_")[-1]
 print(f"\nCatalogs ending with '_{suffix}':")
 display(spark.sql("SHOW CATALOGS").filter(f"catalog LIKE '%_{suffix}'"))
+
+print(f"\nSchemas in {bronze_catalog}:")
+display(spark.sql(f"SHOW SCHEMAS IN `{bronze_catalog}`"))

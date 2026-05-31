@@ -6,7 +6,7 @@
 # MAGIC
 # MAGIC **Source**: frankfurter.app (European Central Bank rates, Mon–Fri)
 # MAGIC **Mode**: First run loads 3 years of history; subsequent runs fetch incrementally.
-# MAGIC **Table**: `bronze_dev.raw_claims.fx_rates_usd_gbp`
+# MAGIC **Table**: `bronze_dev.raw_reference.fx_rates_usd_gbp`
 
 # COMMAND ----------
 
@@ -18,7 +18,7 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 dbutils.widgets.text("bronze_catalog", "bronze_dev")
 bronze_catalog = dbutils.widgets.get("bronze_catalog")
 
-TARGET_TABLE  = f"{bronze_catalog}.raw_claims.fx_rates_usd_gbp"
+TARGET_TABLE  = f"{bronze_catalog}.raw_reference.fx_rates_usd_gbp"
 HISTORY_START = "2022-06-01"   # ~3 years of history
 FX_API_BASE   = "https://api.frankfurter.app"
 
