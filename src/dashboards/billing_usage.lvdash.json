@@ -36,7 +36,7 @@
           "widget": {
             "name": "kpi_total",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "total_cost_gbp", "expression": "`total_cost_gbp`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Total Usage", "showTitle": true}, "encodings": {"value": {"fieldName": "total_cost_gbp", "displayName": "£ GBP · list price · compute only"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Total Usage (£ GBP)", "showTitle": true}, "encodings": {"value": {"fieldName": "total_cost_gbp", "displayName": "List price · compute only · excl. storage & infra", "format": {"prefix": "£"}}}}
           },
           "position": {"x": 0, "y": 1, "width": 4, "height": 3}
         },
@@ -44,37 +44,49 @@
           "widget": {
             "name": "kpi_forecast",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "forecasted_cost_gbp", "expression": "`forecasted_cost_gbp`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Forecasted Usage (Next 30 Days)", "showTitle": true}, "encodings": {"value": {"fieldName": "forecasted_cost_gbp", "displayName": "£ GBP · ai_forecast based on usage history"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Forecasted Usage — Next 30 Days (£ GBP)", "showTitle": true}, "encodings": {"value": {"fieldName": "forecasted_cost_gbp", "displayName": "ai_forecast() projection based on usage history", "format": {"prefix": "£"}}}}
           },
           "position": {"x": 4, "y": 1, "width": 4, "height": 3}
         },
         {
-          "widget": {"name": "notes_text", "textbox_spec": "**Source:** `system.billing.usage` + `system.billing.list_prices`\n\n**Costs:** List price in USD converted to £ GBP using live ECB daily rates (`bronze_dev.raw_reference.fx_rates_usd_gbp`). Compute costs only — excludes storage and cloud infrastructure.\n\n**Forecast:** 30-day projection using Databricks `ai_forecast()`"},
+          "widget": {"name": "notes_text", "textbox_spec": "**All costs in £ GBP** (list price, compute only)\n\n**Source:** `system.billing.usage` × `system.billing.list_prices`\n\n**FX:** Live ECB daily USD/GBP rates — `bronze_dev.raw_reference.fx_rates_usd_gbp`, refreshed daily\n\n**Forecast:** Databricks `ai_forecast()`, horizon 30 days"},
           "position": {"x": 8, "y": 1, "width": 4, "height": 3}
+        },
+        {
+          "widget": {"name": "header_trends", "textbox_spec": "## Total Usage Over Time"},
+          "position": {"x": 0, "y": 4, "width": 8, "height": 1}
+        },
+        {
+          "widget": {"name": "header_product", "textbox_spec": "## Usage by Product"},
+          "position": {"x": 8, "y": 4, "width": 4, "height": 1}
         },
         {
           "widget": {
             "name": "trend_chart",
             "queries": [{"name": "main_query", "query": {"datasetName": "usage_over_time", "fields": [{"name": "daily(ds)", "expression": "DATE_TRUNC(\"DAY\", `ds`)"}, {"name": "sum(cost_gbp)", "expression": "SUM(`cost_gbp`)"}, {"name": "series_type", "expression": "`series_type`"}], "disaggregated": false}}],
-            "spec": {"version": 2, "widgetType": "line", "frame": {"title": "Total Usage Over Time", "showTitle": true}, "encodings": {"x": {"fieldName": "daily(ds)", "displayName": "Date"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}], "color": {"fieldName": "series_type", "displayName": "Series"}}}
+            "spec": {"version": 2, "widgetType": "line", "encodings": {"x": {"fieldName": "daily(ds)", "displayName": "Date"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}], "color": {"fieldName": "series_type", "displayName": "Series"}}}
           },
-          "position": {"x": 0, "y": 4, "width": 8, "height": 7}
+          "position": {"x": 0, "y": 5, "width": 8, "height": 6}
         },
         {
           "widget": {
             "name": "product_bar",
             "queries": [{"name": "main_query", "query": {"datasetName": "cost_by_product", "fields": [{"name": "billing_origin_product", "expression": "`billing_origin_product`"}, {"name": "sum(cost_gbp)", "expression": "SUM(`cost_gbp`)"}], "disaggregated": false}}],
-            "spec": {"version": 2, "widgetType": "bar", "frame": {"title": "Usage by Product", "showTitle": true}, "encodings": {"x": {"fieldName": "billing_origin_product", "displayName": "Product"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}]}}
+            "spec": {"version": 2, "widgetType": "bar", "encodings": {"x": {"fieldName": "billing_origin_product", "displayName": "Product"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}]}}
           },
-          "position": {"x": 8, "y": 4, "width": 4, "height": 7}
+          "position": {"x": 8, "y": 5, "width": 4, "height": 6}
+        },
+        {
+          "widget": {"name": "header_stacked", "textbox_spec": "## Usage by Product Over Time"},
+          "position": {"x": 0, "y": 11, "width": 12, "height": 1}
         },
         {
           "widget": {
             "name": "stacked_chart",
             "queries": [{"name": "main_query", "query": {"datasetName": "cost_by_product_over_time", "fields": [{"name": "daily(usage_date)", "expression": "DATE_TRUNC(\"DAY\", `usage_date`)"}, {"name": "sum(cost_gbp)", "expression": "SUM(`cost_gbp`)"}, {"name": "billing_origin_product", "expression": "`billing_origin_product`"}], "disaggregated": false}}],
-            "spec": {"version": 2, "widgetType": "bar", "frame": {"title": "Usage by Product Over Time", "showTitle": true}, "encodings": {"x": {"fieldName": "daily(usage_date)", "displayName": "Date"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}], "color": {"fieldName": "billing_origin_product", "displayName": "Product"}}}
+            "spec": {"version": 2, "widgetType": "bar", "encodings": {"x": {"fieldName": "daily(usage_date)", "displayName": "Date"}, "y": [{"fieldName": "sum(cost_gbp)", "displayName": "Cost (£ GBP)"}], "color": {"fieldName": "billing_origin_product", "displayName": "Product"}}}
           },
-          "position": {"x": 0, "y": 11, "width": 12, "height": 7}
+          "position": {"x": 0, "y": 12, "width": 12, "height": 6}
         }
       ]
     }
