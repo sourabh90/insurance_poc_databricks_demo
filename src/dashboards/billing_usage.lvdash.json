@@ -1,0 +1,123 @@
+{
+  "datasets": [
+    {
+      "name": "kpi_totals",
+      "displayName": "KPI Totals",
+      "query": "SELECT ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) ELSE 0 END), 2) AS total_dbus, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0) ELSE 0 END), 2) AS estimated_cost_usd, COUNT(DISTINCT u.usage_date) AS active_days FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name = p.sku_name AND u.usage_start_time >= p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time < p.price_end_time) WHERE u.record_type = 'ORIGINAL'"
+    },
+    {
+      "name": "daily_dbu_by_product",
+      "displayName": "Daily DBU by Product",
+      "query": "SELECT usage_date, billing_origin_product, ROUND(SUM(CASE WHEN usage_unit = 'DBU' THEN CAST(usage_quantity AS DOUBLE) ELSE 0 END), 4) AS total_dbus FROM system.billing.usage WHERE record_type = 'ORIGINAL' GROUP BY usage_date, billing_origin_product"
+    },
+    {
+      "name": "dbu_by_product",
+      "displayName": "DBU by Product",
+      "query": "SELECT billing_origin_product, ROUND(SUM(CASE WHEN usage_unit = 'DBU' THEN CAST(usage_quantity AS DOUBLE) ELSE 0 END), 4) AS total_dbus FROM system.billing.usage WHERE record_type = 'ORIGINAL' AND usage_unit = 'DBU' GROUP BY billing_origin_product HAVING total_dbus > 0 ORDER BY total_dbus DESC"
+    },
+    {
+      "name": "monthly_summary",
+      "displayName": "Monthly Summary",
+      "query": "SELECT DATE_TRUNC('MONTH', u.usage_date) AS usage_month, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) ELSE 0 END), 2) AS total_dbus, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0) ELSE 0 END), 2) AS estimated_cost_usd FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name = p.sku_name AND u.usage_start_time >= p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time < p.price_end_time) WHERE u.record_type = 'ORIGINAL' GROUP BY 1 ORDER BY 1"
+    },
+    {
+      "name": "top_workloads",
+      "displayName": "Top Workloads",
+      "query": "SELECT COALESCE(u.usage_metadata.job_name, u.usage_metadata.notebook_path, pl.name, u.usage_metadata.dlt_pipeline_id) AS workload_name, u.billing_origin_product AS product, ROUND(SUM(CAST(u.usage_quantity AS DOUBLE)), 4) AS total_dbus FROM system.billing.usage u LEFT JOIN (SELECT DISTINCT pipeline_id, FIRST(name) AS name FROM system.lakeflow.pipelines GROUP BY pipeline_id) pl ON u.usage_metadata.dlt_pipeline_id = pl.pipeline_id WHERE u.record_type = 'ORIGINAL' AND u.usage_unit = 'DBU' AND COALESCE(u.usage_metadata.job_name, u.usage_metadata.notebook_path, u.usage_metadata.dlt_pipeline_id) IS NOT NULL GROUP BY workload_name, product ORDER BY total_dbus DESC LIMIT 10"
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {"name": "title_text", "textbox_spec": "# Databricks Billing Usage"},
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {"name": "subtitle_text", "textbox_spec": "DBU consumption and estimated cost across all workloads. Source: `system.billing.usage`"},
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi_dbus",
+            "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "total_dbus", "expression": "`total_dbus`"}], "disaggregated": true}}],
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "total_dbus", "displayName": "Total DBUs"}}}
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi_cost",
+            "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "estimated_cost_usd", "expression": "`estimated_cost_usd`"}], "disaggregated": true}}],
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "estimated_cost_usd", "displayName": "Estimated Cost (USD)"}}}
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi_days",
+            "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "active_days", "expression": "`active_days`"}], "disaggregated": true}}],
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "active_days", "displayName": "Active Days"}}}
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {"name": "section_trend", "textbox_spec": "## DBU Consumption Trend"},
+          "position": {"x": 0, "y": 5, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "trend_chart",
+            "queries": [{"name": "main_query", "query": {"datasetName": "daily_dbu_by_product", "fields": [{"name": "daily(usage_date)", "expression": "DATE_TRUNC(\"DAY\", `usage_date`)"}, {"name": "sum(total_dbus)", "expression": "SUM(`total_dbus`)"}, {"name": "billing_origin_product", "expression": "`billing_origin_product`"}], "disaggregated": false}}],
+            "spec": {"version": 2, "widgetType": "line", "encodings": {"x": {"fieldName": "daily(usage_date)", "displayName": "Date"}, "y": [{"fieldName": "sum(total_dbus)", "displayName": "Total DBUs"}], "color": {"fieldName": "billing_origin_product", "displayName": "Product"}}}
+          },
+          "position": {"x": 0, "y": 6, "width": 12, "height": 6}
+        },
+        {
+          "widget": {"name": "section_mix", "textbox_spec": "## Product Mix & Monthly Cost"},
+          "position": {"x": 0, "y": 12, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "pie_chart",
+            "queries": [{"name": "main_query", "query": {"datasetName": "dbu_by_product", "fields": [{"name": "sum(total_dbus)", "expression": "SUM(`total_dbus`)"}, {"name": "billing_origin_product", "expression": "`billing_origin_product`"}], "disaggregated": false}}],
+            "spec": {"version": 2, "widgetType": "pie", "encodings": {"angle": {"fieldName": "sum(total_dbus)", "displayName": "Total DBUs"}, "color": {"fieldName": "billing_origin_product", "displayName": "Product"}}}
+          },
+          "position": {"x": 0, "y": 13, "width": 6, "height": 5}
+        },
+        {
+          "widget": {
+            "name": "monthly_bar",
+            "queries": [{"name": "main_query", "query": {"datasetName": "monthly_summary", "fields": [{"name": "monthly(usage_month)", "expression": "DATE_TRUNC(\"MONTH\", `usage_month`)"}, {"name": "sum(total_dbus)", "expression": "SUM(`total_dbus`)"}, {"name": "sum(estimated_cost_usd)", "expression": "SUM(`estimated_cost_usd`)"}], "disaggregated": false}}],
+            "spec": {"version": 2, "widgetType": "bar", "encodings": {"x": {"fieldName": "monthly(usage_month)", "displayName": "Month"}, "y": [{"fieldName": "sum(total_dbus)", "displayName": "Total DBUs"}, {"fieldName": "sum(estimated_cost_usd)", "displayName": "Estimated Cost (USD)"}]}}
+          },
+          "position": {"x": 6, "y": 13, "width": 6, "height": 5}
+        }
+      ]
+    },
+    {
+      "name": "workloads",
+      "displayName": "Top Workloads",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {"name": "workloads_title", "textbox_spec": "## Top 10 Workloads by DBU Consumption"},
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "workloads_table",
+            "queries": [{"name": "main_query", "query": {"datasetName": "top_workloads", "fields": [{"name": "workload_name", "expression": "`workload_name`"}, {"name": "product", "expression": "`product`"}, {"name": "sum(total_dbus)", "expression": "SUM(`total_dbus`)"}], "disaggregated": false}}],
+            "spec": {"version": 2, "widgetType": "table", "encodings": {"columns": [{"fieldName": "workload_name", "displayName": "Workload"}, {"fieldName": "product", "displayName": "Product"}, {"fieldName": "sum(total_dbus)", "displayName": "Total DBUs"}]}}
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 8}
+        }
+      ]
+    }
+  ]
+}
