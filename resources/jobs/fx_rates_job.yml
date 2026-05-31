@@ -1,0 +1,17 @@
+resources:
+  jobs:
+    fx_rates_ingest:
+      name: "[${bundle.target}] insurance_poc - Job - FX Rates Daily Ingest"
+      schedule:
+        quartz_cron_expression: "0 0 9 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: ingest_usd_gbp_rates
+          notebook_task:
+            notebook_path: ../../src/notebooks/ingest_fx_rates.py
+            base_parameters:
+              bronze_catalog: ${var.bronze_catalog}
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"
