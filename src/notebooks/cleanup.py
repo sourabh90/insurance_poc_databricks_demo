@@ -52,7 +52,7 @@ print("=" * 60)
 
 print(f"\n[1/4] Dropping landing Volume → {bronze_catalog}.{bronze_schema}.landing ...")
 spark.sql(f"DROP VOLUME IF EXISTS `{bronze_catalog}`.`{bronze_schema}`.`landing`")
-print(f"  ✓ Volume dropped (all landing CSV files removed)")
+print("  ✓ Volume dropped (all landing CSV files removed)")
 
 # COMMAND ----------
 # ── Step 2: Drop bronze schema + all tables ───────────────────────────────────
@@ -80,12 +80,12 @@ for gs in GOLD_SCHEMAS:
 # ── Optional: Drop catalogs ───────────────────────────────────────────────────
 
 if drop_catalogs:
-    print(f"\n[Optional] Dropping catalogs (CASCADE) ...")
+    print("\n[Optional] Dropping catalogs (CASCADE) ...")
     for cat in [bronze_catalog, silver_catalog, gold_catalog]:
         spark.sql(f"DROP CATALOG IF EXISTS `{cat}` CASCADE")
         print(f"  ✓ Catalog {cat} dropped")
 else:
-    print(f"\n[Optional] Skipping catalog drop (set drop_catalogs=yes to include).")
+    print("\n[Optional] Skipping catalog drop (set drop_catalogs=yes to include).")
     print(f"  Empty catalogs remaining: {bronze_catalog}, {silver_catalog}, {gold_catalog}")
 
 # COMMAND ----------

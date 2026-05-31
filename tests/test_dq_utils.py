@@ -1,6 +1,5 @@
 """Tests for the add_dq and to_quarantine helper functions in dq_utils."""
 
-import pytest
 import pyspark.sql.functions as F
 from pyspark.sql import Row
 from dq_utils import add_dq, to_quarantine, QUARANTINE_COLS

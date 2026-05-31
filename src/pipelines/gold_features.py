@@ -3,7 +3,6 @@
 
 import dlt
 import pyspark.sql.functions as F
-from pyspark.sql.window import Window
 
 silver_catalog = spark.conf.get("silver_catalog", "silver_dev")
 silver_schema  = spark.conf.get("silver_schema",  "refined_claims")

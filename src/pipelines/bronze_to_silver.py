@@ -17,7 +17,7 @@
 import dlt
 import pyspark.sql.functions as F
 from pyspark.sql.types import IntegerType, DoubleType
-from dq_utils import add_dq as _add_dq, to_quarantine as _to_quarantine, QUARANTINE_COLS
+from dq_utils import add_dq as _add_dq, to_quarantine as _to_quarantine
 
 bronze_catalog = spark.conf.get("bronze_catalog", "bronze_dev")
 bronze_schema  = spark.conf.get("bronze_schema",  "raw_claims")

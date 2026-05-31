@@ -23,7 +23,7 @@
 # COMMAND ----------
 
 import pyspark.sql.functions as F
-from pyspark.sql.types import StringType, IntegerType, DoubleType, DateType
+from pyspark.sql.types import StringType, IntegerType, DateType
 import pandas as pd
 from datetime import date
 
