@@ -3,7 +3,7 @@
     {
       "name": "kpi_totals",
       "displayName": "KPI Totals",
-      "query": "SELECT ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) ELSE 0 END), 2) AS total_dbus, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0) * fx.usd_to_gbp ELSE 0 END), 2) AS estimated_cost_gbp, COUNT(DISTINCT u.usage_date) AS active_days FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name = p.sku_name AND u.usage_start_time >= p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time < p.price_end_time) LEFT JOIN (SELECT rate_date, usd_to_gbp, COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date), DATE_ADD(rate_date, 365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date >= fx.rate_date AND u.usage_date < fx.next_rate_date WHERE u.record_type = 'ORIGINAL'"
+      "query": "SELECT ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) ELSE 0 END), 2) AS total_dbus, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0) * fx.usd_to_gbp ELSE 0 END), 2) AS estimated_cost_gbp, COUNT(DISTINCT u.usage_date) AS active_days, ROUND(SUM(CASE WHEN u.usage_unit = 'DBU' THEN CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0) * fx.usd_to_gbp ELSE 0 END) / NULLIF(COUNT(DISTINCT DATE_TRUNC('MONTH', u.usage_date)), 0), 2) AS avg_monthly_cost_gbp FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name = p.sku_name AND u.usage_start_time >= p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time < p.price_end_time) LEFT JOIN (SELECT rate_date, usd_to_gbp, COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date), DATE_ADD(rate_date, 365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date >= fx.rate_date AND u.usage_date < fx.next_rate_date WHERE u.record_type = 'ORIGINAL'"
     },
     {
       "name": "daily_dbu_by_product",
@@ -45,25 +45,33 @@
           "widget": {
             "name": "kpi_dbus",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "total_dbus", "expression": "`total_dbus`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "total_dbus", "displayName": "Total DBUs"}}}
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "total_dbus", "displayName": "Total Compute Used (DBUs) — units of compute consumed across all jobs, pipelines & queries"}}}
           },
-          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+          "position": {"x": 0, "y": 2, "width": 3, "height": 3}
         },
         {
           "widget": {
             "name": "kpi_cost",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "estimated_cost_gbp", "expression": "`estimated_cost_gbp`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "estimated_cost_gbp", "displayName": "Estimated Cost (£ GBP)"}}}
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "estimated_cost_gbp", "displayName": "Total Compute Cost (£) — list price only, excludes storage & cloud infra"}}}
           },
-          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+          "position": {"x": 3, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi_avg_monthly",
+            "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "avg_monthly_cost_gbp", "expression": "`avg_monthly_cost_gbp`"}], "disaggregated": true}}],
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "avg_monthly_cost_gbp", "displayName": "Avg. Monthly Cost (£) — total cost divided by number of active months"}}}
+          },
+          "position": {"x": 6, "y": 2, "width": 3, "height": 3}
         },
         {
           "widget": {
             "name": "kpi_days",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "active_days", "expression": "`active_days`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "active_days", "displayName": "Active Days"}}}
+            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "active_days", "displayName": "Days with Activity — calendar days Databricks logged any usage (incl. background tasks)"}}}
           },
-          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+          "position": {"x": 9, "y": 2, "width": 3, "height": 3}
         },
         {
           "widget": {"name": "section_trend", "textbox_spec": "## DBU Consumption Trend"},
