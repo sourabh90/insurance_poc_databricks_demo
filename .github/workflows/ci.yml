@@ -49,6 +49,7 @@ jobs:
     name: Bundle Validate
     runs-on: ubuntu-latest
     needs: [lint, test]
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +65,7 @@ jobs:
     name: Deploy to Dev
     runs-on: ubuntu-latest
     needs: [validate]
+    environment: dev
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
