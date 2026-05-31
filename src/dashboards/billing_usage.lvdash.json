@@ -45,7 +45,7 @@
           "widget": {
             "name": "kpi_dbus",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "total_dbus", "expression": "`total_dbus`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "total_dbus", "displayName": "Total Compute Used (DBUs) — units of compute consumed across all jobs, pipelines & queries"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Total Compute Used (DBUs)", "showTitle": true}, "encodings": {"value": {"fieldName": "total_dbus", "displayName": "Billing units consumed across all jobs, pipelines & queries"}}}
           },
           "position": {"x": 0, "y": 2, "width": 3, "height": 3}
         },
@@ -53,7 +53,7 @@
           "widget": {
             "name": "kpi_cost",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "estimated_cost_gbp", "expression": "`estimated_cost_gbp`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "estimated_cost_gbp", "displayName": "Total Compute Cost (£) — list price only, excludes storage & cloud infra"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Total Compute Cost (£ GBP)", "showTitle": true}, "encodings": {"value": {"fieldName": "estimated_cost_gbp", "displayName": "List price only · excludes storage & cloud infrastructure"}}}
           },
           "position": {"x": 3, "y": 2, "width": 3, "height": 3}
         },
@@ -61,7 +61,7 @@
           "widget": {
             "name": "kpi_avg_monthly",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "avg_monthly_cost_gbp", "expression": "`avg_monthly_cost_gbp`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "avg_monthly_cost_gbp", "displayName": "Avg. Monthly Cost (£) — total cost divided by number of active months"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Avg. Monthly Cost (£ GBP)", "showTitle": true}, "encodings": {"value": {"fieldName": "avg_monthly_cost_gbp", "displayName": "Total cost ÷ number of active months"}}}
           },
           "position": {"x": 6, "y": 2, "width": 3, "height": 3}
         },
@@ -69,7 +69,7 @@
           "widget": {
             "name": "kpi_days",
             "queries": [{"name": "main_query", "query": {"datasetName": "kpi_totals", "fields": [{"name": "active_days", "expression": "`active_days`"}], "disaggregated": true}}],
-            "spec": {"version": 2, "widgetType": "counter", "encodings": {"value": {"fieldName": "active_days", "displayName": "Days with Activity — calendar days Databricks logged any usage (incl. background tasks)"}}}
+            "spec": {"version": 2, "widgetType": "counter", "frame": {"title": "Days with Activity", "showTitle": true}, "encodings": {"value": {"fieldName": "active_days", "displayName": "Calendar days Databricks logged usage (incl. background tasks)"}}}
           },
           "position": {"x": 9, "y": 2, "width": 3, "height": 3}
         },
