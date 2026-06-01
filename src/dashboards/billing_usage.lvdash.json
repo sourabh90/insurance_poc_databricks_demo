@@ -4,42 +4,749 @@
       "name": "kpi_totals",
       "displayName": "KPI Totals",
       "queryLines": [
-        "SELECT ROUND(SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END),2) AS total_cost_gbp, ROUND((SELECT SUM(GREATEST(y_forecast,0)) FROM ai_forecast(TABLE(SELECT usage_date AS ds, SUM(CASE WHEN u2.usage_unit='DBU' THEN CAST(u2.usage_quantity AS DOUBLE)*COALESCE(CAST(p2.pricing.effective_list.default AS DOUBLE),0)*fx2.usd_to_gbp ELSE 0 END) AS y FROM system.billing.usage u2 LEFT JOIN system.billing.list_prices p2 ON u2.sku_name=p2.sku_name AND u2.usage_start_time>=p2.price_start_time AND (p2.price_end_time IS NULL OR u2.usage_start_time<p2.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx2 ON u2.usage_date>=fx2.rate_date AND u2.usage_date<fx2.next_rate_date WHERE u2.record_type='ORIGINAL' AND u2.usage_unit='DBU' GROUP BY usage_date ORDER BY usage_date), horizon=>'2026-06-30',time_col=>'ds',value_col=>'y')),2) AS forecasted_cost_gbp, CONCAT(DATE_FORMAT(MIN(u.usage_date), 'MMM yyyy'), ' to ', DATE_FORMAT(MAX(u.usage_date), 'MMM yyyy')) AS coverage_period FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL'"
+        "SELECT\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN\n",
+        "          u.usage_unit = 'DBU'\n",
+        "        THEN\n",
+        "          CAST(u.usage_quantity AS DOUBLE)\n",
+        "            * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "            * fx.usd_to_gbp\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    ),\n",
+        "    2\n",
+        "  ) AS total_cost_gbp,\n",
+        "  ROUND(\n",
+        "    (\n",
+        "      SELECT\n",
+        "        SUM(GREATEST(y_forecast, 0))\n",
+        "      FROM\n",
+        "        ai_forecast(\n",
+        "          TABLE (\n",
+        "\n",
+        "            SELECT\n",
+        "              usage_date AS ds,\n",
+        "              SUM(\n",
+        "                CASE\n",
+        "                  WHEN\n",
+        "                    u2.usage_unit = 'DBU'\n",
+        "                  THEN\n",
+        "                    CAST(u2.usage_quantity AS DOUBLE)\n",
+        "                      * COALESCE(CAST(p2.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "                      * fx2.usd_to_gbp\n",
+        "                  ELSE 0\n",
+        "                END\n",
+        "              ) AS y\n",
+        "            FROM\n",
+        "              system.billing.usage u2\n",
+        "                LEFT JOIN system.billing.list_prices p2\n",
+        "                  ON u2.sku_name = p2.sku_name\n",
+        "                  AND u2.usage_start_time >= p2.price_start_time\n",
+        "                  AND (\n",
+        "                    p2.price_end_time IS NULL\n",
+        "                    OR u2.usage_start_time < p2.price_end_time\n",
+        "                  )\n",
+        "                LEFT JOIN (\n",
+        "                  SELECT\n",
+        "                    rate_date,\n",
+        "                    usd_to_gbp,\n",
+        "                    COALESCE(\n",
+        "                      LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "                      DATE_ADD(rate_date, 365)\n",
+        "                    ) AS next_rate_date\n",
+        "                  FROM\n",
+        "                    bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "                ) fx2\n",
+        "                  ON u2.usage_date >= fx2.rate_date\n",
+        "                  AND u2.usage_date < fx2.next_rate_date\n",
+        "            WHERE\n",
+        "              u2.record_type = 'ORIGINAL'\n",
+        "              AND u2.usage_unit = 'DBU'\n",
+        "              AND u2.usage_date >= :date_range.min\n",
+        "              AND u2.usage_date <= :date_range.max\n",
+        "              AND (\n",
+        "                array_size(:products) = 0\n",
+        "                OR array_contains(:products, u2.billing_origin_product)\n",
+        "              )\n",
+        "            GROUP BY\n",
+        "              usage_date\n",
+        "            ORDER BY\n",
+        "              usage_date\n",
+        "          ),\n",
+        "          horizon => '2026-06-30',\n",
+        "          time_col => 'ds',\n",
+        "          value_col => 'y'\n",
+        "        )\n",
+        "    ),\n",
+        "    2\n",
+        "  ) AS forecasted_cost_gbp,\n",
+        "  CONCAT(\n",
+        "    DATE_FORMAT(MIN(u.usage_date), 'MMM yyyy'),\n",
+        "    ' to ',\n",
+        "    DATE_FORMAT(MAX(u.usage_date), 'MMM yyyy')\n",
+        "  ) AS coverage_period\n",
+        "FROM\n",
+        "  system.billing.usage u\n",
+        "    LEFT JOIN system.billing.list_prices p\n",
+        "      ON u.sku_name = p.sku_name\n",
+        "      AND u.usage_start_time >= p.price_start_time\n",
+        "      AND (\n",
+        "        p.price_end_time IS NULL\n",
+        "        OR u.usage_start_time < p.price_end_time\n",
+        "      )\n",
+        "    LEFT JOIN (\n",
+        "      SELECT\n",
+        "        rate_date,\n",
+        "        usd_to_gbp,\n",
+        "        COALESCE(\n",
+        "          LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "          DATE_ADD(rate_date, 365)\n",
+        "        ) AS next_rate_date\n",
+        "      FROM\n",
+        "        bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "    ) fx\n",
+        "      ON u.usage_date >= fx.rate_date\n",
+        "      AND u.usage_date < fx.next_rate_date\n",
+        "WHERE\n",
+        "  u.record_type = 'ORIGINAL'\n",
+        "  AND u.usage_date >= :date_range.min\n",
+        "  AND u.usage_date <= :date_range.max\n",
+        "  AND (\n",
+        "    array_size(:products) = 0\n",
+        "    OR array_contains(:products, u.billing_origin_product)\n",
+        "  )"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "2025-06-26"
+              },
+              "max": {
+                "value": "2026-05-31"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Products",
+          "keyword": "products",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING"
+            }
+          }
+        }
       ]
     },
     {
       "name": "avg_by_granularity",
       "displayName": "Avg Cost by Granularity",
       "queryLines": [
-        "WITH base AS (SELECT u.usage_date, SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END) AS day_cost FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' GROUP BY u.usage_date) SELECT 'Daily' AS granularity, ROUND(AVG(day_cost),2) AS avg_cost_gbp FROM base UNION ALL SELECT 'Weekly', ROUND(AVG(week_cost),2) FROM (SELECT DATE_TRUNC('WEEK',usage_date) AS wk, SUM(day_cost) AS week_cost FROM base GROUP BY 1) UNION ALL SELECT 'Monthly', ROUND(AVG(month_cost),2) FROM (SELECT DATE_TRUNC('MONTH',usage_date) AS mo, SUM(day_cost) AS month_cost FROM base GROUP BY 1)"
+        "WITH base AS (\n",
+        "  SELECT\n",
+        "    u.usage_date,\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN\n",
+        "          u.usage_unit = 'DBU'\n",
+        "        THEN\n",
+        "          CAST(u.usage_quantity AS DOUBLE)\n",
+        "            * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "            * fx.usd_to_gbp\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    ) AS day_cost\n",
+        "  FROM\n",
+        "    system.billing.usage u\n",
+        "      LEFT JOIN system.billing.list_prices p\n",
+        "        ON u.sku_name = p.sku_name\n",
+        "        AND u.usage_start_time >= p.price_start_time\n",
+        "        AND (\n",
+        "          p.price_end_time IS NULL\n",
+        "          OR u.usage_start_time < p.price_end_time\n",
+        "        )\n",
+        "      LEFT JOIN (\n",
+        "        SELECT\n",
+        "          rate_date,\n",
+        "          usd_to_gbp,\n",
+        "          COALESCE(\n",
+        "            LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "            DATE_ADD(rate_date, 365)\n",
+        "          ) AS next_rate_date\n",
+        "        FROM\n",
+        "          bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "      ) fx\n",
+        "        ON u.usage_date >= fx.rate_date\n",
+        "        AND u.usage_date < fx.next_rate_date\n",
+        "  WHERE\n",
+        "    u.record_type = 'ORIGINAL'\n",
+        "    AND u.usage_date >= :date_range.min\n",
+        "    AND u.usage_date <= :date_range.max\n",
+        "    AND (\n",
+        "      array_size(:products) = 0\n",
+        "      OR array_contains(:products, u.billing_origin_product)\n",
+        "    )\n",
+        "  GROUP BY\n",
+        "    u.usage_date\n",
+        ")\n",
+        "SELECT\n",
+        "  'Daily' AS granularity,\n",
+        "  ROUND(AVG(day_cost), 2) AS avg_cost_gbp\n",
+        "FROM\n",
+        "  base\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Weekly',\n",
+        "  ROUND(AVG(week_cost), 2)\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      DATE_TRUNC('WEEK', usage_date) AS wk,\n",
+        "      SUM(day_cost) AS week_cost\n",
+        "    FROM\n",
+        "      base\n",
+        "    GROUP BY\n",
+        "      1\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Monthly',\n",
+        "  ROUND(AVG(month_cost), 2)\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      DATE_TRUNC('MONTH', usage_date) AS mo,\n",
+        "      SUM(day_cost) AS month_cost\n",
+        "    FROM\n",
+        "      base\n",
+        "    GROUP BY\n",
+        "      1\n",
+        "  )"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "2025-06-26"
+              },
+              "max": {
+                "value": "2026-05-31"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Products",
+          "keyword": "products",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING"
+            }
+          }
+        }
       ]
     },
     {
       "name": "usage_over_time",
       "displayName": "Usage Over Time (Actuals + Forecast)",
       "queryLines": [
-        "SELECT ds, ROUND(cost_gbp,4) AS cost_gbp, series_type FROM (SELECT usage_date AS ds, SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END) AS cost_gbp, 'Actual' AS series_type FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' GROUP BY usage_date UNION ALL SELECT ds, GREATEST(y_forecast,0) AS cost_gbp, 'Forecast' AS series_type FROM ai_forecast(TABLE(SELECT usage_date AS ds, SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END) AS y FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' AND u.usage_unit='DBU' GROUP BY usage_date ORDER BY usage_date), horizon=>'2026-06-30',time_col=>'ds',value_col=>'y')) ORDER BY ds"
+        "SELECT\n",
+        "  ds,\n",
+        "  ROUND(cost_gbp, 4) AS cost_gbp,\n",
+        "  series_type\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      usage_date AS ds,\n",
+        "      SUM(\n",
+        "        CASE\n",
+        "          WHEN\n",
+        "            u.usage_unit = 'DBU'\n",
+        "          THEN\n",
+        "            CAST(u.usage_quantity AS DOUBLE)\n",
+        "              * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "              * fx.usd_to_gbp\n",
+        "          ELSE 0\n",
+        "        END\n",
+        "      ) AS cost_gbp,\n",
+        "      'Actual' AS series_type\n",
+        "    FROM\n",
+        "      system.billing.usage u\n",
+        "        LEFT JOIN system.billing.list_prices p\n",
+        "          ON u.sku_name = p.sku_name\n",
+        "          AND u.usage_start_time >= p.price_start_time\n",
+        "          AND (\n",
+        "            p.price_end_time IS NULL\n",
+        "            OR u.usage_start_time < p.price_end_time\n",
+        "          )\n",
+        "        LEFT JOIN (\n",
+        "          SELECT\n",
+        "            rate_date,\n",
+        "            usd_to_gbp,\n",
+        "            COALESCE(\n",
+        "              LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "              DATE_ADD(rate_date, 365)\n",
+        "            ) AS next_rate_date\n",
+        "          FROM\n",
+        "            bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "        ) fx\n",
+        "          ON u.usage_date >= fx.rate_date\n",
+        "          AND u.usage_date < fx.next_rate_date\n",
+        "    WHERE\n",
+        "      u.record_type = 'ORIGINAL'\n",
+        "      AND u.usage_date >= :date_range.min\n",
+        "      AND u.usage_date <= :date_range.max\n",
+        "      AND (\n",
+        "        array_size(:products) = 0\n",
+        "        OR array_contains(:products, u.billing_origin_product)\n",
+        "      )\n",
+        "    GROUP BY\n",
+        "      usage_date\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      ds,\n",
+        "      GREATEST(y_forecast, 0) AS cost_gbp,\n",
+        "      'Forecast' AS series_type\n",
+        "    FROM\n",
+        "      ai_forecast(\n",
+        "        TABLE (\n",
+        "\n",
+        "          SELECT\n",
+        "            usage_date AS ds,\n",
+        "            SUM(\n",
+        "              CASE\n",
+        "                WHEN\n",
+        "                  u2.usage_unit = 'DBU'\n",
+        "                THEN\n",
+        "                  CAST(u2.usage_quantity AS DOUBLE)\n",
+        "                    * COALESCE(CAST(p2.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "                    * fx2.usd_to_gbp\n",
+        "                ELSE 0\n",
+        "              END\n",
+        "            ) AS y\n",
+        "          FROM\n",
+        "            system.billing.usage u2\n",
+        "              LEFT JOIN system.billing.list_prices p2\n",
+        "                ON u2.sku_name = p2.sku_name\n",
+        "                AND u2.usage_start_time >= p2.price_start_time\n",
+        "                AND (\n",
+        "                  p2.price_end_time IS NULL\n",
+        "                  OR u2.usage_start_time < p2.price_end_time\n",
+        "                )\n",
+        "              LEFT JOIN (\n",
+        "                SELECT\n",
+        "                  rate_date,\n",
+        "                  usd_to_gbp,\n",
+        "                  COALESCE(\n",
+        "                    LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "                    DATE_ADD(rate_date, 365)\n",
+        "                  ) AS next_rate_date\n",
+        "                FROM\n",
+        "                  bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "              ) fx2\n",
+        "                ON u2.usage_date >= fx2.rate_date\n",
+        "                AND u2.usage_date < fx2.next_rate_date\n",
+        "          WHERE\n",
+        "            u2.record_type = 'ORIGINAL'\n",
+        "            AND u2.usage_unit = 'DBU'\n",
+        "            AND u2.usage_date >= :date_range.min\n",
+        "            AND u2.usage_date <= :date_range.max\n",
+        "            AND (\n",
+        "              array_size(:products) = 0\n",
+        "              OR array_contains(:products, u2.billing_origin_product)\n",
+        "            )\n",
+        "          GROUP BY\n",
+        "            usage_date\n",
+        "          ORDER BY\n",
+        "            usage_date\n",
+        "        ),\n",
+        "        horizon => '2026-06-30',\n",
+        "        time_col => 'ds',\n",
+        "        value_col => 'y'\n",
+        "      )\n",
+        "  )\n",
+        "ORDER BY\n",
+        "  ds"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "2025-06-26"
+              },
+              "max": {
+                "value": "2026-05-31"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Products",
+          "keyword": "products",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING"
+            }
+          }
+        }
       ]
     },
     {
       "name": "cost_by_product",
       "displayName": "Cost by Product",
       "queryLines": [
-        "SELECT billing_origin_product, ROUND(SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END),2) AS cost_gbp FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' GROUP BY billing_origin_product HAVING cost_gbp > 0 ORDER BY cost_gbp DESC"
+        "SELECT\n",
+        "  billing_origin_product,\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN\n",
+        "          u.usage_unit = 'DBU'\n",
+        "        THEN\n",
+        "          CAST(u.usage_quantity AS DOUBLE)\n",
+        "            * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "            * fx.usd_to_gbp\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    ),\n",
+        "    2\n",
+        "  ) AS cost_gbp\n",
+        "FROM\n",
+        "  system.billing.usage u\n",
+        "    LEFT JOIN system.billing.list_prices p\n",
+        "      ON u.sku_name = p.sku_name\n",
+        "      AND u.usage_start_time >= p.price_start_time\n",
+        "      AND (\n",
+        "        p.price_end_time IS NULL\n",
+        "        OR u.usage_start_time < p.price_end_time\n",
+        "      )\n",
+        "    LEFT JOIN (\n",
+        "      SELECT\n",
+        "        rate_date,\n",
+        "        usd_to_gbp,\n",
+        "        COALESCE(\n",
+        "          LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "          DATE_ADD(rate_date, 365)\n",
+        "        ) AS next_rate_date\n",
+        "      FROM\n",
+        "        bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "    ) fx\n",
+        "      ON u.usage_date >= fx.rate_date\n",
+        "      AND u.usage_date < fx.next_rate_date\n",
+        "WHERE\n",
+        "  u.record_type = 'ORIGINAL'\n",
+        "  AND u.usage_date >= :date_range.min\n",
+        "  AND u.usage_date <= :date_range.max\n",
+        "  AND (\n",
+        "    array_size(:products) = 0\n",
+        "    OR array_contains(:products, u.billing_origin_product)\n",
+        "  )\n",
+        "GROUP BY\n",
+        "  billing_origin_product\n",
+        "HAVING\n",
+        "  cost_gbp > 0\n",
+        "ORDER BY\n",
+        "  cost_gbp DESC"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "2025-06-26"
+              },
+              "max": {
+                "value": "2026-05-31"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Products",
+          "keyword": "products",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING"
+            }
+          }
+        }
       ]
     },
     {
       "name": "cost_by_product_over_time",
       "displayName": "Cost by Product Over Time",
       "queryLines": [
-        "SELECT usage_date, billing_origin_product, ROUND(SUM(CASE WHEN u.usage_unit='DBU' THEN CAST(u.usage_quantity AS DOUBLE)*COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0)*fx.usd_to_gbp ELSE 0 END),4) AS cost_gbp FROM system.billing.usage u LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' GROUP BY usage_date, billing_origin_product ORDER BY usage_date"
+        "SELECT\n",
+        "  usage_date,\n",
+        "  billing_origin_product,\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN\n",
+        "          u.usage_unit = 'DBU'\n",
+        "        THEN\n",
+        "          CAST(u.usage_quantity AS DOUBLE)\n",
+        "            * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "            * fx.usd_to_gbp\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    ),\n",
+        "    4\n",
+        "  ) AS cost_gbp\n",
+        "FROM\n",
+        "  system.billing.usage u\n",
+        "    LEFT JOIN system.billing.list_prices p\n",
+        "      ON u.sku_name = p.sku_name\n",
+        "      AND u.usage_start_time >= p.price_start_time\n",
+        "      AND (\n",
+        "        p.price_end_time IS NULL\n",
+        "        OR u.usage_start_time < p.price_end_time\n",
+        "      )\n",
+        "    LEFT JOIN (\n",
+        "      SELECT\n",
+        "        rate_date,\n",
+        "        usd_to_gbp,\n",
+        "        COALESCE(\n",
+        "          LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "          DATE_ADD(rate_date, 365)\n",
+        "        ) AS next_rate_date\n",
+        "      FROM\n",
+        "        bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "    ) fx\n",
+        "      ON u.usage_date >= fx.rate_date\n",
+        "      AND u.usage_date < fx.next_rate_date\n",
+        "WHERE\n",
+        "  u.record_type = 'ORIGINAL'\n",
+        "  AND u.usage_date >= DATEADD(DAY, -90, CURRENT_DATE())\n",
+        "GROUP BY\n",
+        "  usage_date,\n",
+        "  billing_origin_product\n",
+        "ORDER BY\n",
+        "  usage_date"
       ]
     },
     {
       "name": "top_n_workloads",
       "displayName": "Top N Workloads",
       "queryLines": [
-        "WITH ranked AS (SELECT COALESCE(u.usage_metadata.job_name, u.usage_metadata.notebook_path, pl.name, u.usage_metadata.dlt_pipeline_id) AS workload_name, u.billing_origin_product AS product, ROUND(SUM(CAST(u.usage_quantity AS DOUBLE)), 4) AS total_dbus, ROUND(SUM(CAST(u.usage_quantity AS DOUBLE) * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE),0) * fx.usd_to_gbp), 2) AS estimated_cost_gbp, ROW_NUMBER() OVER (ORDER BY SUM(CAST(u.usage_quantity AS DOUBLE)) DESC) AS rank FROM system.billing.usage u LEFT JOIN (SELECT DISTINCT pipeline_id, FIRST(name) AS name FROM system.lakeflow.pipelines GROUP BY pipeline_id) pl ON u.usage_metadata.dlt_pipeline_id = pl.pipeline_id LEFT JOIN system.billing.list_prices p ON u.sku_name=p.sku_name AND u.usage_start_time>=p.price_start_time AND (p.price_end_time IS NULL OR u.usage_start_time<p.price_end_time) LEFT JOIN (SELECT rate_date,usd_to_gbp,COALESCE(LEAD(rate_date) OVER (ORDER BY rate_date),DATE_ADD(rate_date,365)) AS next_rate_date FROM bronze_dev.raw_reference.fx_rates_usd_gbp) fx ON u.usage_date>=fx.rate_date AND u.usage_date<fx.next_rate_date WHERE u.record_type='ORIGINAL' AND u.usage_unit='DBU' AND COALESCE(u.usage_metadata.job_name, u.usage_metadata.notebook_path, u.usage_metadata.dlt_pipeline_id) IS NOT NULL GROUP BY workload_name, product) SELECT workload_name, product, total_dbus, estimated_cost_gbp, rank, 'Top 5'  AS top_n FROM ranked WHERE rank <= 5 UNION ALL SELECT workload_name, product, total_dbus, estimated_cost_gbp, rank, 'Top 10' AS top_n FROM ranked WHERE rank <= 10 UNION ALL SELECT workload_name, product, total_dbus, estimated_cost_gbp, rank, 'Top 15' AS top_n FROM ranked WHERE rank <= 15 UNION ALL SELECT workload_name, product, total_dbus, estimated_cost_gbp, rank, 'Top 20' AS top_n FROM ranked WHERE rank <= 20 ORDER BY top_n, rank"
+        "WITH ranked AS (\n",
+        "  SELECT\n",
+        "    COALESCE(\n",
+        "      u.usage_metadata.job_name,\n",
+        "      u.usage_metadata.notebook_path,\n",
+        "      pl.name,\n",
+        "      u.usage_metadata.dlt_pipeline_id\n",
+        "    ) AS workload_name,\n",
+        "    u.billing_origin_product AS product,\n",
+        "    ROUND(SUM(CAST(u.usage_quantity AS DOUBLE)), 4) AS total_dbus,\n",
+        "    ROUND(\n",
+        "      SUM(\n",
+        "        CAST(u.usage_quantity AS DOUBLE)\n",
+        "          * COALESCE(CAST(p.pricing.effective_list.default AS DOUBLE), 0)\n",
+        "          * fx.usd_to_gbp\n",
+        "      ),\n",
+        "      2\n",
+        "    ) AS estimated_cost_gbp,\n",
+        "    ROW_NUMBER() OVER (ORDER BY SUM(CAST(u.usage_quantity AS DOUBLE)) DESC) AS rank\n",
+        "  FROM\n",
+        "    system.billing.usage u\n",
+        "      LEFT JOIN (\n",
+        "        SELECT DISTINCT\n",
+        "          pipeline_id,\n",
+        "          FIRST(name) AS name\n",
+        "        FROM\n",
+        "          system.lakeflow.pipelines\n",
+        "        GROUP BY\n",
+        "          pipeline_id\n",
+        "      ) pl\n",
+        "        ON u.usage_metadata.dlt_pipeline_id = pl.pipeline_id\n",
+        "      LEFT JOIN system.billing.list_prices p\n",
+        "        ON u.sku_name = p.sku_name\n",
+        "        AND u.usage_start_time >= p.price_start_time\n",
+        "        AND (\n",
+        "          p.price_end_time IS NULL\n",
+        "          OR u.usage_start_time < p.price_end_time\n",
+        "        )\n",
+        "      LEFT JOIN (\n",
+        "        SELECT\n",
+        "          rate_date,\n",
+        "          usd_to_gbp,\n",
+        "          COALESCE(\n",
+        "            LEAD(rate_date) OVER (ORDER BY rate_date),\n",
+        "            DATE_ADD(rate_date, 365)\n",
+        "          ) AS next_rate_date\n",
+        "        FROM\n",
+        "          bronze_dev.raw_reference.fx_rates_usd_gbp\n",
+        "      ) fx\n",
+        "        ON u.usage_date >= fx.rate_date\n",
+        "        AND u.usage_date < fx.next_rate_date\n",
+        "  WHERE\n",
+        "    u.record_type = 'ORIGINAL'\n",
+        "    AND u.usage_unit = 'DBU'\n",
+        "    AND COALESCE(\n",
+        "      u.usage_metadata.job_name,\n",
+        "      u.usage_metadata.notebook_path,\n",
+        "      u.usage_metadata.dlt_pipeline_id\n",
+        "    ) IS NOT NULL\n",
+        "    AND u.usage_date >= :date_range.min\n",
+        "    AND u.usage_date <= :date_range.max\n",
+        "    AND (\n",
+        "      array_size(:products) = 0\n",
+        "      OR array_contains(:products, u.billing_origin_product)\n",
+        "    )\n",
+        "  GROUP BY\n",
+        "    workload_name,\n",
+        "    product\n",
+        "),\n",
+        "all_variants AS (\n",
+        "  SELECT\n",
+        "    workload_name,\n",
+        "    product,\n",
+        "    total_dbus,\n",
+        "    estimated_cost_gbp,\n",
+        "    rank,\n",
+        "    'Top 5' AS top_n\n",
+        "  FROM\n",
+        "    ranked\n",
+        "  WHERE\n",
+        "    rank <= 5\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    workload_name,\n",
+        "    product,\n",
+        "    total_dbus,\n",
+        "    estimated_cost_gbp,\n",
+        "    rank,\n",
+        "    'Top 10' AS top_n\n",
+        "  FROM\n",
+        "    ranked\n",
+        "  WHERE\n",
+        "    rank <= 10\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    workload_name,\n",
+        "    product,\n",
+        "    total_dbus,\n",
+        "    estimated_cost_gbp,\n",
+        "    rank,\n",
+        "    'Top 15' AS top_n\n",
+        "  FROM\n",
+        "    ranked\n",
+        "  WHERE\n",
+        "    rank <= 15\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    workload_name,\n",
+        "    product,\n",
+        "    total_dbus,\n",
+        "    estimated_cost_gbp,\n",
+        "    rank,\n",
+        "    'Top 20' AS top_n\n",
+        "  FROM\n",
+        "    ranked\n",
+        "  WHERE\n",
+        "    rank <= 20\n",
+        "  UNION ALL\n",
+        "  SELECT\n",
+        "    workload_name,\n",
+        "    product,\n",
+        "    total_dbus,\n",
+        "    estimated_cost_gbp,\n",
+        "    rank,\n",
+        "    'Top 25' AS top_n\n",
+        "  FROM\n",
+        "    ranked\n",
+        "  WHERE\n",
+        "    rank <= 25\n",
+        ")\n",
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  all_variants\n",
+        "WHERE\n",
+        "  top_n = :top_n\n",
+        "ORDER BY\n",
+        "  rank"
+      ],
+      "parameters": [
+        {
+          "displayName": "Date Range",
+          "keyword": "date_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "2026-04-01"
+              },
+              "max": {
+                "value": "2026-05-31"
+              }
+            }
+          }
+        },
+        {
+          "displayName": "Products",
+          "keyword": "products",
+          "dataType": "STRING",
+          "complexType": "MULTI",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING"
+            }
+          }
+        },
+        {
+          "displayName": "Top N",
+          "keyword": "top_n",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Top 10"
+                }
+              ]
+            }
+          }
+        }
       ]
     }
   ],
@@ -488,7 +1195,11 @@
         {
           "widget": {
             "name": "header_top_n",
-            "textbox_spec": "## Top N Workloads by DBU \u2014 use the 'Top N' filter above to set N"
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Top N Workloads by DBU \u2014 use the 'Top N' filter on the Global Filters page"
+              ]
+            }
           },
           "position": {
             "x": 0,
@@ -525,10 +1236,6 @@
                     {
                       "name": "sum(estimated_cost_gbp)",
                       "expression": "SUM(`estimated_cost_gbp`)"
-                    },
-                    {
-                      "name": "top_n",
-                      "expression": "`top_n`"
                     }
                   ],
                   "disaggregated": false
@@ -537,11 +1244,11 @@
             ],
             "spec": {
               "version": 2,
-              "widgetType": "table",
               "frame": {
                 "title": "Top N Workloads (\u00a3 \u00b7 ranked by DBU)",
                 "showTitle": true
               },
+              "widgetType": "table",
               "encodings": {
                 "columns": [
                   {
@@ -577,6 +1284,193 @@
         }
       ],
       "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "global_filters",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "date_range_filter",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c17958524e53b24471524_date_range",
+                "query": {
+                  "datasetName": "usage_over_time",
+                  "parameters": [
+                    {
+                      "name": "date_range",
+                      "keyword": "date_range"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "title": "Date Range",
+                "showTitle": true
+              },
+              "version": 2,
+              "selection": {
+                "defaultSelection": {
+                  "range": {
+                    "dataType": "DATE",
+                    "min": {
+                      "value": "2026-04-01"
+                    },
+                    "max": {
+                      "value": "2026-05-31"
+                    }
+                  }
+                }
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "date_range",
+                    "queryName": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c17958524e53b24471524_date_range"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "product_filter",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c17988677e1c9652e13be_products",
+                "query": {
+                  "datasetName": "cost_by_product",
+                  "parameters": [
+                    {
+                      "name": "products",
+                      "keyword": "products"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "disallowAll": false,
+              "scale": {
+                "type": "categorical",
+                "sort": {
+                  "by": "natural-order"
+                }
+              },
+              "frame": {
+                "title": "Products",
+                "showTitle": true
+              },
+              "version": 2,
+              "selection": {
+                "defaultSelection": {
+                  "values": {
+                    "dataType": "STRING",
+                    "values": []
+                  }
+                }
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "products",
+                    "queryName": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c17988677e1c9652e13be_products"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "top_n_filter",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c179db12493eb551a934c_top_n",
+                "query": {
+                  "datasetName": "top_n_workloads",
+                  "parameters": [
+                    {
+                      "name": "top_n",
+                      "keyword": "top_n"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Top N",
+                "showTitle": true
+              },
+              "scale": {
+                "type": "categorical",
+                "sort": {
+                  "by": "custom-order",
+                  "orderedValues": [
+                    "Top 5",
+                    "Top 10",
+                    "Top 15",
+                    "Top 20",
+                    "Top 25"
+                  ]
+                }
+              },
+              "selection": {
+                "defaultSelection": {
+                  "values": {
+                    "dataType": "STRING",
+                    "values": [
+                      {
+                        "value": "Top 10"
+                      }
+                    ]
+                  }
+                }
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "top_n",
+                    "queryName": "parameter_dashboards/01f15d1e038a1e129f37ebe6a31e0e03/datasets/01f15d494f6c179db12493eb551a934c_top_n"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
       "layoutVersion": "GRID_V1"
     }
   ]
