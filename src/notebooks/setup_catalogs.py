@@ -19,12 +19,14 @@ dbutils.widgets.text("silver_catalog", "silver_dev",     "Silver Catalog")
 dbutils.widgets.text("gold_catalog",   "gold_dev",       "Gold Catalog")
 dbutils.widgets.text("bronze_schema",  "raw_claims",     "Bronze Schema")
 dbutils.widgets.text("silver_schema",  "refined_claims", "Silver Schema")
+dbutils.widgets.text("app_service_principal", "", "App Service Principal (optional)")
 
-bronze_catalog = dbutils.widgets.get("bronze_catalog")
-silver_catalog = dbutils.widgets.get("silver_catalog")
-gold_catalog   = dbutils.widgets.get("gold_catalog")
-bronze_schema  = dbutils.widgets.get("bronze_schema")
-silver_schema  = dbutils.widgets.get("silver_schema")
+bronze_catalog      = dbutils.widgets.get("bronze_catalog")
+silver_catalog      = dbutils.widgets.get("silver_catalog")
+gold_catalog        = dbutils.widgets.get("gold_catalog")
+bronze_schema       = dbutils.widgets.get("bronze_schema")
+silver_schema       = dbutils.widgets.get("silver_schema")
+app_sp              = dbutils.widgets.get("app_service_principal").strip()
 
 GOLD_SCHEMAS      = ["dimensions", "facts", "features", "summary"]
 REFERENCE_SCHEMA  = "raw_reference"
@@ -81,3 +83,28 @@ display(spark.sql("SHOW CATALOGS").filter(f"catalog LIKE '%_{suffix}'"))
 
 print(f"\nSchemas in {bronze_catalog}:")
 display(spark.sql(f"SHOW SCHEMAS IN `{bronze_catalog}`"))
+
+# COMMAND ----------
+# Grant Databricks App service principal access to billing-related resources
+
+if app_sp:
+    # app_service_principal must be the SP's applicationId (UUID), not the display name.
+    # Find it: Databricks UI → Apps → <app> → Service principal → Application ID
+    # Or: databricks apps get <app-name> --profile <profile> | jq .service_principal_client_id
+    print(f"\nGranting permissions to app SP (applicationId): {app_sp}")
+    grants = [
+        # bronze_dev — FX rates reference table used by the billing app
+        f"GRANT USE CATALOG ON CATALOG `{bronze_catalog}` TO `{app_sp}`",
+        f"GRANT USE SCHEMA ON SCHEMA `{bronze_catalog}`.`{REFERENCE_SCHEMA}` TO `{app_sp}`",
+        f"GRANT SELECT ON TABLE `{bronze_catalog}`.`{REFERENCE_SCHEMA}`.`fx_rates_usd_gbp` TO `{app_sp}`",
+        # system.billing and system.lakeflow are accessible to SPs with
+        # databricks-sql-access entitlement — granted automatically by Databricks Apps.
+        # No explicit GRANT needed for system catalog tables.
+    ]
+    for stmt in grants:
+        spark.sql(stmt)
+        print(f"  ✓ {stmt.split(' TO ')[0].replace('GRANT ', '')}")
+    print("\nGrants applied. Note: system.billing and system.lakeflow tables are")
+    print("accessible to the app SP via its databricks-sql-access entitlement.")
+else:
+    print("\nSkipping grants — no app_service_principal provided.")

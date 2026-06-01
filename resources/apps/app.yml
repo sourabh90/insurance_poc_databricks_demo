@@ -1,8 +1,8 @@
 resources:
   apps:
     insurance_poc_databricks_demo_app:
-      name: "ins-claims-demo-${bundle.target}"
-      description: "Interactive Databricks billing usage dashboard — Streamlit on Databricks Apps"
+      name: "databricks-billing-usage-${bundle.target}"
+      description: "Databricks Billing Usage App — interactive Streamlit dashboard for compute cost analytics"
       source_code_path: ../../src/app
       resources:
         - name: sql-warehouse
