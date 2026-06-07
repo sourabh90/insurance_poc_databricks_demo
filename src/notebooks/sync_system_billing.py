@@ -126,66 +126,74 @@ else:
 
 # COMMAND ----------
 # job_task_run_timeline — incremental append with 7-day overlap window
+# Requires metastore admin to enable system.lakeflow tables for the workspace.
 
-jt_ref = f"{full_schema}.job_task_run_timeline"
-jt_exists = spark.catalog.tableExists(f"{monitoring_catalog}.{schema}.job_task_run_timeline")
+try:
+    jt_ref = f"{full_schema}.job_task_run_timeline"
+    jt_exists = spark.catalog.tableExists(f"{monitoring_catalog}.{schema}.job_task_run_timeline")
 
-if not jt_exists:
-    spark.sql(f"""
-      CREATE TABLE {jt_ref}
-      AS SELECT * FROM system.lakeflow.job_task_run_timeline
-    """)
-    count = spark.sql(f"SELECT COUNT(*) FROM {jt_ref}").collect()[0][0]
-    print(f"✓ job_task_run_timeline : {count:,} rows (initial full load)")
-else:
-    max_date_row = spark.sql(f"SELECT MAX(DATE(period_start_time)) FROM {jt_ref}").collect()[0][0]
-    if max_date_row is None:
-        cutoff = date(2020, 1, 1)
+    if not jt_exists:
+        spark.sql(f"""
+          CREATE TABLE {jt_ref}
+          AS SELECT * FROM system.lakeflow.job_task_run_timeline
+        """)
+        count = spark.sql(f"SELECT COUNT(*) FROM {jt_ref}").collect()[0][0]
+        print(f"✓ job_task_run_timeline : {count:,} rows (initial full load)")
     else:
-        cutoff = max_date_row - timedelta(days=7)
+        max_date_row = spark.sql(f"SELECT MAX(DATE(period_start_time)) FROM {jt_ref}").collect()[0][0]
+        if max_date_row is None:
+            cutoff = date(2020, 1, 1)
+        else:
+            cutoff = max_date_row - timedelta(days=7)
 
-    spark.sql(f"DELETE FROM {jt_ref} WHERE DATE(period_start_time) >= '{cutoff}'")
-    spark.sql(f"""
-      INSERT INTO {jt_ref}
-      SELECT * FROM system.lakeflow.job_task_run_timeline
-      WHERE DATE(period_start_time) >= '{cutoff}'
-    """)
-    count = spark.sql(f"SELECT COUNT(*) FROM {jt_ref}").collect()[0][0]
-    print(f"✓ job_task_run_timeline : {count:,} rows total (incremental from {cutoff})")
+        spark.sql(f"DELETE FROM {jt_ref} WHERE DATE(period_start_time) >= '{cutoff}'")
+        spark.sql(f"""
+          INSERT INTO {jt_ref}
+          SELECT * FROM system.lakeflow.job_task_run_timeline
+          WHERE DATE(period_start_time) >= '{cutoff}'
+        """)
+        count = spark.sql(f"SELECT COUNT(*) FROM {jt_ref}").collect()[0][0]
+        print(f"✓ job_task_run_timeline : {count:,} rows total (incremental from {cutoff})")
+except Exception as e:
+    print(f"⚠ job_task_run_timeline skipped — system.lakeflow not enabled for this workspace: {e}")
 
 # COMMAND ----------
 # pipeline_update_timeline — incremental append with 7-day overlap window
+# Requires metastore admin to enable system.lakeflow tables for the workspace.
 
-put_ref = f"{full_schema}.pipeline_update_timeline"
-put_exists = spark.catalog.tableExists(f"{monitoring_catalog}.{schema}.pipeline_update_timeline")
+try:
+    put_ref = f"{full_schema}.pipeline_update_timeline"
+    put_exists = spark.catalog.tableExists(f"{monitoring_catalog}.{schema}.pipeline_update_timeline")
 
-if not put_exists:
-    spark.sql(f"""
-      CREATE TABLE {put_ref}
-      AS
-      SELECT t.*, p.name AS pipeline_name
-      FROM system.lakeflow.pipeline_update_timeline t
-      LEFT JOIN system.lakeflow.pipelines p ON t.pipeline_id = p.pipeline_id
-    """)
-    count = spark.sql(f"SELECT COUNT(*) FROM {put_ref}").collect()[0][0]
-    print(f"✓ pipeline_update_timeline : {count:,} rows (initial full load)")
-else:
-    max_date_row = spark.sql(f"SELECT MAX(DATE(period_start_time)) FROM {put_ref}").collect()[0][0]
-    if max_date_row is None:
-        cutoff = date(2020, 1, 1)
+    if not put_exists:
+        spark.sql(f"""
+          CREATE TABLE {put_ref}
+          AS
+          SELECT t.*, p.name AS pipeline_name
+          FROM system.lakeflow.pipeline_update_timeline t
+          LEFT JOIN system.lakeflow.pipelines p ON t.pipeline_id = p.pipeline_id
+        """)
+        count = spark.sql(f"SELECT COUNT(*) FROM {put_ref}").collect()[0][0]
+        print(f"✓ pipeline_update_timeline : {count:,} rows (initial full load)")
     else:
-        cutoff = max_date_row - timedelta(days=7)
+        max_date_row = spark.sql(f"SELECT MAX(DATE(period_start_time)) FROM {put_ref}").collect()[0][0]
+        if max_date_row is None:
+            cutoff = date(2020, 1, 1)
+        else:
+            cutoff = max_date_row - timedelta(days=7)
 
-    spark.sql(f"DELETE FROM {put_ref} WHERE DATE(period_start_time) >= '{cutoff}'")
-    spark.sql(f"""
-      INSERT INTO {put_ref}
-      SELECT t.*, p.name AS pipeline_name
-      FROM system.lakeflow.pipeline_update_timeline t
-      LEFT JOIN system.lakeflow.pipelines p ON t.pipeline_id = p.pipeline_id
-      WHERE DATE(t.period_start_time) >= '{cutoff}'
-    """)
-    count = spark.sql(f"SELECT COUNT(*) FROM {put_ref}").collect()[0][0]
-    print(f"✓ pipeline_update_timeline : {count:,} rows total (incremental from {cutoff})")
+        spark.sql(f"DELETE FROM {put_ref} WHERE DATE(period_start_time) >= '{cutoff}'")
+        spark.sql(f"""
+          INSERT INTO {put_ref}
+          SELECT t.*, p.name AS pipeline_name
+          FROM system.lakeflow.pipeline_update_timeline t
+          LEFT JOIN system.lakeflow.pipelines p ON t.pipeline_id = p.pipeline_id
+          WHERE DATE(t.period_start_time) >= '{cutoff}'
+        """)
+        count = spark.sql(f"SELECT COUNT(*) FROM {put_ref}").collect()[0][0]
+        print(f"✓ pipeline_update_timeline : {count:,} rows total (incremental from {cutoff})")
+except Exception as e:
+    print(f"⚠ pipeline_update_timeline skipped — system.lakeflow not enabled for this workspace: {e}")
 
 # COMMAND ----------
 # Grant app SP SELECT on all tables (USE CATALOG + USE SCHEMA granted by setup_job)
@@ -194,7 +202,10 @@ if app_sp:
     print(f"\nGranting SELECT to app SP: {app_sp}")
     for tbl in ["usage", "list_prices", "pipelines",
                 "query_history", "pipeline_update_timeline", "job_task_run_timeline"]:
-        spark.sql(f"GRANT SELECT ON TABLE {full_schema}.{tbl} TO `{app_sp}`")
-        print(f"  ✓ SELECT on {monitoring_catalog}.{schema}.{tbl}")
+        if spark.catalog.tableExists(f"{monitoring_catalog}.{schema}.{tbl}"):
+            spark.sql(f"GRANT SELECT ON TABLE {full_schema}.{tbl} TO `{app_sp}`")
+            print(f"  ✓ SELECT on {monitoring_catalog}.{schema}.{tbl}")
+        else:
+            print(f"  ⚠ Skipped {tbl} — table does not exist (system table likely not enabled)")
 else:
     print("\nSkipping table grants — no app_service_principal provided.")
