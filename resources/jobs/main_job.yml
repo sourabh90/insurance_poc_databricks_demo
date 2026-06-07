@@ -53,6 +53,18 @@ resources:
             pipeline_id: ${resources.pipelines.insurance_poc_gold_summary.id}
             full_refresh: false
 
+        # Step 5: train severity model on freshly updated claim_features
+        - task_key: train_severity_model
+          max_retries: 1
+          depends_on:
+            - task_key: load_gold_summary
+          notebook_task:
+            notebook_path: ../../src/notebooks/train_severity_model.py
+            base_parameters:
+              gold_catalog:       ${var.gold_catalog}
+              ml_experiment_name: ${var.ml_experiment_name}
+              ml_model_name:      ${var.ml_model_name}
+
       permissions:
         - level: CAN_VIEW
           group_name: "users"

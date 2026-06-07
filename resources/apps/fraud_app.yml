@@ -1,0 +1,11 @@
+resources:
+  apps:
+    insurance_poc_fraud_app:
+      name: "fraud-intelligence-${bundle.target}"
+      description: "Fraud Intelligence App — risk and fraud analytics for the insurance claims POC"
+      source_code_path: ../../src/app/fraud
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE

@@ -6,3 +6,7 @@ command:
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: MONITORING_CATALOG
+    value: monitoring_dev
+  - name: BRONZE_CATALOG
+    value: bronze_dev

@@ -6,35 +6,42 @@
 # MAGIC
 # MAGIC Creates all Unity Catalog resources for the insurance_poc_databricks_demo project.
 # MAGIC
-# MAGIC | Layer  | Catalog        | Schema(s)                              |
-# MAGIC |--------|----------------|----------------------------------------|
-# MAGIC | Bronze | bronze_dev/prod | raw_claims (+ landing Volume)         |
-# MAGIC | Silver | silver_dev/prod | refined_claims                         |
-# MAGIC | Gold   | gold_dev/prod   | dimensions, facts, features, summary   |
+# MAGIC | Layer      | Catalog             | Schema(s)                              |
+# MAGIC |------------|---------------------|----------------------------------------|
+# MAGIC | Bronze     | bronze_dev/prod     | raw_claims (+ landing Volume)          |
+# MAGIC | Silver     | silver_dev/prod     | refined_claims                         |
+# MAGIC | Gold       | gold_dev/prod       | dimensions, facts, features, summary   |
+# MAGIC | Monitoring | monitoring_dev/prod | system_billing                         |
 
 # COMMAND ----------
 
-dbutils.widgets.text("bronze_catalog", "bronze_dev",     "Bronze Catalog")
-dbutils.widgets.text("silver_catalog", "silver_dev",     "Silver Catalog")
-dbutils.widgets.text("gold_catalog",   "gold_dev",       "Gold Catalog")
-dbutils.widgets.text("bronze_schema",  "raw_claims",     "Bronze Schema")
-dbutils.widgets.text("silver_schema",  "refined_claims", "Silver Schema")
-dbutils.widgets.text("app_service_principal", "", "App Service Principal (optional)")
+dbutils.widgets.text("bronze_catalog",        "bronze_dev",     "Bronze Catalog")
+dbutils.widgets.text("silver_catalog",        "silver_dev",     "Silver Catalog")
+dbutils.widgets.text("gold_catalog",          "gold_dev",       "Gold Catalog")
+dbutils.widgets.text("monitoring_catalog",    "monitoring_dev", "Monitoring Catalog")
+dbutils.widgets.text("bronze_schema",         "raw_claims",     "Bronze Schema")
+dbutils.widgets.text("silver_schema",         "refined_claims", "Silver Schema")
+dbutils.widgets.text("app_service_principal",       "", "Billing App SP (optional)")
+dbutils.widgets.text("fraud_app_service_principal", "", "Fraud App SP (optional)")
 
 bronze_catalog      = dbutils.widgets.get("bronze_catalog")
 silver_catalog      = dbutils.widgets.get("silver_catalog")
 gold_catalog        = dbutils.widgets.get("gold_catalog")
+monitoring_catalog  = dbutils.widgets.get("monitoring_catalog")
 bronze_schema       = dbutils.widgets.get("bronze_schema")
 silver_schema       = dbutils.widgets.get("silver_schema")
 app_sp              = dbutils.widgets.get("app_service_principal").strip()
+fraud_app_sp        = dbutils.widgets.get("fraud_app_service_principal").strip()
 
-GOLD_SCHEMAS      = ["dimensions", "facts", "features", "summary"]
-REFERENCE_SCHEMA  = "raw_reference"
+GOLD_SCHEMAS        = ["dimensions", "facts", "features", "summary", "models"]
+MONITORING_SCHEMA   = "system_billing"
+REFERENCE_SCHEMA    = "raw_reference"
 
-print(f"Bronze    : {bronze_catalog}.{bronze_schema}")
-print(f"Reference : {bronze_catalog}.{REFERENCE_SCHEMA}")
-print(f"Silver    : {silver_catalog}.{silver_schema}")
-print(f"Gold      : {gold_catalog}.{{{', '.join(GOLD_SCHEMAS)}}}")
+print(f"Bronze     : {bronze_catalog}.{bronze_schema}")
+print(f"Reference  : {bronze_catalog}.{REFERENCE_SCHEMA}")
+print(f"Silver     : {silver_catalog}.{silver_schema}")
+print(f"Gold       : {gold_catalog}.{{{', '.join(GOLD_SCHEMAS)}}}")
+print(f"Monitoring : {monitoring_catalog}.{MONITORING_SCHEMA}")
 
 # COMMAND ----------
 # Create catalogs
@@ -58,6 +65,9 @@ print(f"✓ schema: {silver_catalog}.{silver_schema}")
 for gs in GOLD_SCHEMAS:
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{gold_catalog}`.`{gs}`")
     print(f"✓ schema: {gold_catalog}.{gs}")
+
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{monitoring_catalog}`.`{MONITORING_SCHEMA}`")
+print(f"✓ schema: {monitoring_catalog}.{MONITORING_SCHEMA}")
 
 # COMMAND ----------
 # Create landing Volume in bronze (external files dropped here by ingestion process)
@@ -93,18 +103,37 @@ if app_sp:
     # Or: databricks apps get <app-name> --profile <profile> | jq .service_principal_client_id
     print(f"\nGranting permissions to app SP (applicationId): {app_sp}")
     grants = [
-        # bronze_dev — FX rates reference table used by the billing app
+        # bronze — FX rates reference table
         f"GRANT USE CATALOG ON CATALOG `{bronze_catalog}` TO `{app_sp}`",
         f"GRANT USE SCHEMA ON SCHEMA `{bronze_catalog}`.`{REFERENCE_SCHEMA}` TO `{app_sp}`",
         f"GRANT SELECT ON TABLE `{bronze_catalog}`.`{REFERENCE_SCHEMA}`.`fx_rates_usd_gbp` TO `{app_sp}`",
-        # system.billing and system.lakeflow are accessible to SPs with
-        # databricks-sql-access entitlement — granted automatically by Databricks Apps.
-        # No explicit GRANT needed for system catalog tables.
+        # monitoring — replicated system.billing tables used by the billing app
+        # (table-level SELECT grants are applied by sync_system_billing after table creation)
+        f"GRANT USE CATALOG ON CATALOG `{monitoring_catalog}` TO `{app_sp}`",
+        f"GRANT USE SCHEMA ON SCHEMA `{monitoring_catalog}`.`{MONITORING_SCHEMA}` TO `{app_sp}`",
     ]
     for stmt in grants:
         spark.sql(stmt)
         print(f"  ✓ {stmt.split(' TO ')[0].replace('GRANT ', '')}")
-    print("\nGrants applied. Note: system.billing and system.lakeflow tables are")
-    print("accessible to the app SP via its databricks-sql-access entitlement.")
+    print("\nNote: SELECT grants on monitoring tables are applied by the")
+    print("sync_system_billing job after tables are created.")
 else:
-    print("\nSkipping grants — no app_service_principal provided.")
+    print("\nSkipping billing app grants — no app_service_principal provided.")
+
+# COMMAND ----------
+# Grant fraud intelligence app SP access to gold catalog
+
+if fraud_app_sp:
+    print(f"\nGranting permissions to fraud app SP (applicationId): {fraud_app_sp}")
+    fraud_grants = [
+        f"GRANT USE CATALOG ON CATALOG `{gold_catalog}` TO `{fraud_app_sp}`",
+        f"GRANT USE SCHEMA ON SCHEMA `{gold_catalog}`.`summary` TO `{fraud_app_sp}`",
+        f"GRANT SELECT ON TABLE `{gold_catalog}`.`summary`.`summary_fraud_intelligence` TO `{fraud_app_sp}`",
+    ]
+    for stmt in fraud_grants:
+        spark.sql(stmt)
+        print(f"  ✓ {stmt.split(' TO ')[0].replace('GRANT ', '')}")
+else:
+    print("\nSkipping fraud app grants — no fraud_app_service_principal provided.")
+    print("Once deployed, find the SP ID with:")
+    print("  databricks apps get fraud-intelligence-dev --output json | grep service_principal_client_id")

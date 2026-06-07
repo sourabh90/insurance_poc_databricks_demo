@@ -6,4 +6,4 @@ ignore = ["E501"]
 [lint.per-file-ignores]
 # spark, dbutils, display are injected by the Databricks runtime — not real imports
 "src/pipelines/*.py" = ["F821"]
-"src/notebooks/*.py" = ["F821"]
+"src/notebooks/*.py" = ["F821", "E402"]

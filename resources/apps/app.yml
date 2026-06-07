@@ -3,7 +3,7 @@ resources:
     insurance_poc_databricks_demo_app:
       name: "databricks-billing-usage-${bundle.target}"
       description: "Databricks Billing Usage App — interactive Streamlit dashboard for compute cost analytics"
-      source_code_path: ../../src/app
+      source_code_path: ../../src/app/billing
       resources:
         - name: sql-warehouse
           sql_warehouse:

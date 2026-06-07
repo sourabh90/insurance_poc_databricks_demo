@@ -18,27 +18,46 @@ variables:
   warehouse_id:
     lookup:
       warehouse: "Serverless Starter Warehouse"
+  app_service_principal:
+    default: ""
+    description: "Client ID (UUID) of the billing app SP — grants access to bronze + monitoring catalogs."
+  fraud_app_service_principal:
+    default: ""
+    description: "Client ID (UUID) of the fraud intelligence app SP — grants access to gold catalog. Find it after first deploy: databricks apps get databricks-fraud-intelligence-dev | grep service_principal_client_id"
+  monitoring_catalog:
+    default: "monitoring_dev"
+    description: "Catalog that holds replicas of system.billing and system.lakeflow tables for the billing app."
+  ml_experiment_name:
+    default: "/Shared/insurance_poc/claim_severity"
+    description: "MLflow experiment path for the claim severity classifier."
+  ml_model_name:
+    default: "claim_severity_classifier"
+    description: "UC registered model name — registered under {gold_catalog}.models.{ml_model_name}."
 
 targets:
   dev:
     default: true
     mode: development
     workspace:
-      profile: personal
+      host: https://dbc-357ad19b-69f7.cloud.databricks.com/
     variables:
-      bronze_catalog: "bronze_dev"
-      silver_catalog: "silver_dev"
-      gold_catalog:   "gold_dev"
-      bronze_schema:  "raw_claims"
-      silver_schema:  "refined_claims"
+      bronze_catalog:          "bronze_dev"
+      silver_catalog:          "silver_dev"
+      gold_catalog:            "gold_dev"
+      monitoring_catalog:      "monitoring_dev"
+      bronze_schema:           "raw_claims"
+      silver_schema:           "refined_claims"
+      app_service_principal:        "db0074e0-eada-4248-be2c-ee9635bbb105"
+      fraud_app_service_principal:  "67d0c7c4-29c2-4df1-9e25-7ef23f095efb"
 
   prod:
     mode: production
     workspace:
-      profile: personal
+      host: https://dbc-357ad19b-69f7.cloud.databricks.com/
     variables:
-      bronze_catalog: "bronze_prod"
-      silver_catalog: "silver_prod"
-      gold_catalog:   "gold_prod"
-      bronze_schema:  "raw_claims"
-      silver_schema:  "refined_claims"
+      bronze_catalog:     "bronze_prod"
+      silver_catalog:     "silver_prod"
+      gold_catalog:       "gold_prod"
+      monitoring_catalog: "monitoring_prod"
+      bronze_schema:      "raw_claims"
+      silver_schema:      "refined_claims"
