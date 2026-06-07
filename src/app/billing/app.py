@@ -658,7 +658,12 @@ with perf_tab2:
     """)
 
     if dlt_df.empty:
-        st.info("No pipeline duration data found. Run **sync_system_billing_job** to populate the `pipeline_update_timeline` table, then refresh.")
+        st.info(
+            "No pipeline duration data available. This can mean either:\n\n"
+            "- **`system.lakeflow` not enabled** in this workspace — a metastore admin must enable it "
+            "under Catalog Explorer → system → lakeflow before it can be synced.\n"
+            "- The sync job hasn't run yet — trigger **sync_system_billing_job** and refresh."
+        )
     else:
         dlt_df["duration_min"] = dlt_df["duration_min"].astype(float)
         completed = dlt_df[dlt_df["result_state"] == "COMPLETED"]
@@ -714,7 +719,12 @@ with perf_tab3:
     """)
 
     if task_df.empty:
-        st.info("No job task data found. Run **sync_system_billing_job** to populate the `job_task_run_timeline` table, then refresh.")
+        st.info(
+            "No job task data available. This can mean either:\n\n"
+            "- **`system.lakeflow` not enabled** in this workspace — a metastore admin must enable it "
+            "under Catalog Explorer → system → lakeflow before it can be synced.\n"
+            "- The sync job hasn't run yet — trigger **sync_system_billing_job** and refresh."
+        )
     else:
         task_df["duration_min"] = task_df["duration_min"].astype(float)
 
