@@ -9,7 +9,7 @@ resources:
       tasks:
         - task_key: ingest_usd_gbp_rates
           notebook_task:
-            notebook_path: ../../src/notebooks/ingest_fx_rates.py
+            notebook_path: ../../../src/notebooks/pipeline/ingest_fx_rates.py
             base_parameters:
               bronze_catalog: ${var.bronze_catalog}
       permissions:

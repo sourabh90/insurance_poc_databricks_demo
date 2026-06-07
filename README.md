@@ -77,13 +77,16 @@ insurance_poc_databricks_demo/
 │   └── gold_data_model.md           # Gold layer — star schema, ML features, summary KPIs
 ├── src/
 │   ├── notebooks/
-│   │   ├── setup_catalogs.py        # Creates UC catalogs, schemas, volumes; applies app SP grants
-│   │   ├── generate_synthetic_data.py   # Faker-based data generation (600K+ rows, 3% bad data)
-│   │   ├── train_severity_model.py  # LightGBM training: claim_features → UC model registry
-│   │   ├── sync_system_billing.py   # Nightly sync: system.billing → monitoring_dev
-│   │   ├── ingest_fx_rates.py       # Ingests ECB FX rates into bronze_dev.raw_reference
-│   │   ├── main.py                  # Display catalog tables
-│   │   └── cleanup.py               # Full teardown (reversible)
+│   │   ├── pipeline/                # Data pipeline notebooks
+│   │   │   ├── setup_catalogs.py        # Creates UC catalogs, schemas, volumes; applies app SP grants
+│   │   │   ├── generate_synthetic_data.py   # Faker-based data generation (600K+ rows, 3% bad data)
+│   │   │   ├── ingest_fx_rates.py       # Ingests ECB FX rates into bronze_dev.raw_reference
+│   │   │   ├── main.py                  # Display catalog tables
+│   │   │   └── cleanup.py               # Full teardown (reversible)
+│   │   ├── monitoring/              # Ops notebooks
+│   │   │   └── sync_system_billing.py   # Nightly sync: system.billing → monitoring_dev
+│   │   └── mlops/                   # ML notebooks
+│   │       └── train_severity_model.py  # LightGBM training: claim_features → UC model registry
 │   ├── pipelines/
 │   │   ├── landing_to_bronze.py     # Autoloader: Volume CSV → raw Delta tables
 │   │   ├── bronze_to_silver.py      # Type casting + DQ checks + quarantine

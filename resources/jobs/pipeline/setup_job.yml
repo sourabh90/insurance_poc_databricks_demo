@@ -5,7 +5,7 @@ resources:
       tasks:
         - task_key: create_catalogs_schemas_volumes
           notebook_task:
-            notebook_path: ../../src/notebooks/setup_catalogs.py
+            notebook_path: ../../../src/notebooks/pipeline/setup_catalogs.py
             base_parameters:
               bronze_catalog:        ${var.bronze_catalog}
               silver_catalog:        ${var.silver_catalog}

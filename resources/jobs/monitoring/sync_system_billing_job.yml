@@ -5,7 +5,7 @@ resources:
       tasks:
         - task_key: sync_system_billing
           notebook_task:
-            notebook_path: ../../src/notebooks/sync_system_billing.py
+            notebook_path: ../../../src/notebooks/monitoring/sync_system_billing.py
             base_parameters:
               monitoring_catalog:    ${var.monitoring_catalog}
               app_service_principal: ${var.app_service_principal}

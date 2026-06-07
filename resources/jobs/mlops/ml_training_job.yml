@@ -6,7 +6,7 @@ resources:
         - task_key: train_severity_model
           max_retries: 1
           notebook_task:
-            notebook_path: ../../src/notebooks/train_severity_model.py
+            notebook_path: ../../../src/notebooks/mlops/train_severity_model.py
             base_parameters:
               gold_catalog:       ${var.gold_catalog}
               ml_experiment_name: ${var.ml_experiment_name}

@@ -59,7 +59,7 @@ resources:
           depends_on:
             - task_key: load_gold_summary
           notebook_task:
-            notebook_path: ../../src/notebooks/train_severity_model.py
+            notebook_path: ../../../src/notebooks/mlops/train_severity_model.py
             base_parameters:
               gold_catalog:       ${var.gold_catalog}
               ml_experiment_name: ${var.ml_experiment_name}
