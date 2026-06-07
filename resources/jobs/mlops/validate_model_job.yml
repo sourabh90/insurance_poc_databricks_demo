@@ -1,0 +1,21 @@
+resources:
+  jobs:
+    insurance_poc_validate_model:
+      name: "[${bundle.target}] insurance_poc - Job - Validate Champion Model"
+      tasks:
+        - task_key: validate_champion
+          max_retries: 0
+          notebook_task:
+            notebook_path: ../../../src/notebooks/mlops/validate_model.py
+            base_parameters:
+              gold_catalog:          ${var.gold_catalog}
+              ml_model_name:         ${var.ml_model_name}
+              n_claims:              "10000"
+              random_seed:           "999"
+              thresh_accuracy:       "0.75"
+              thresh_f1_weighted:    "0.73"
+              thresh_f1_macro:       "0.65"
+              thresh_f1_total_loss:  "0.55"
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

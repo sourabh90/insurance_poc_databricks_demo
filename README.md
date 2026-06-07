@@ -87,7 +87,8 @@ insurance_poc_databricks_demo/
 │   │   │   └── sync_system_billing.py   # Nightly sync: system.billing → monitoring_dev
 │   │   └── mlops/                   # ML notebooks
 │   │       ├── train_severity_model.py  # LightGBM training: claim_features → UC model registry
-│   │       └── batch_score.py           # Batch inference: champion model → claim_predictions
+│   │       ├── batch_score.py           # Batch inference: champion model → claim_predictions
+│   │       └── validate_model.py        # Validation: fresh synthetic batch + threshold gates
 │   ├── pipelines/
 │   │   ├── landing_to_bronze.py     # Autoloader: Volume CSV → raw Delta tables
 │   │   ├── bronze_to_silver.py      # Type casting + DQ checks + quarantine
@@ -120,7 +121,7 @@ insurance_poc_databricks_demo/
     ├── jobs/
     │   ├── pipeline/                # Data orchestration jobs (setup, data_gen, main, fx_rates, cleanup)
     │   ├── monitoring/              # Ops jobs (sync_system_billing — nightly)
-    │   └── mlops/                   # ML jobs (ml_training_job, batch_inference_job)
+    │   └── mlops/                   # ML jobs (ml_training_job, batch_inference_job, validate_model_job)
     ├── dashboards/                  # Dashboard resource definitions (2 files)
     ├── alerts/                      # DQ failure alert (daily, emailed to owner)
     └── apps/                        # Databricks Apps resource definitions (2 files)
@@ -243,6 +244,7 @@ databricks bundle run insurance_poc_databricks_demo_cleanup --target dev
 | `insurance_poc_sync_system_billing` | Job - Sync System Billing | Replicates system.billing tables to monitoring_dev | Daily 02:00 Europe/London |
 | `insurance_poc_ml_training_job` | Job - ML Severity Model Training | Trains LightGBM classifier on claim_features, registers model in UC | Manual (run after main_job) |
 | `insurance_poc_batch_inference` | Job - Batch Inference (Claim Severity) | Scores all claims with champion model, writes claim_predictions to gold | Manual (run after training) |
+| `insurance_poc_validate_model` | Job - Validate Champion Model | Fresh synthetic batch validation with threshold gates, logged to MLflow | Manual (run after training) |
 | `insurance_poc_databricks_demo_cleanup` | Job - Cleanup | Full teardown of catalogs and schemas | Manual |
 
 ---
@@ -439,6 +441,43 @@ databricks bundle run insurance_poc_batch_inference --target dev
 ```
 
 **Source:** `src/notebooks/mlops/batch_score.py` · **DAB resource:** `resources/jobs/mlops/batch_inference_job.yml`
+
+---
+
+---
+
+### Model Validation
+
+Validates the `champion` model against a **fresh synthetic batch** (Faker seed=999, never seen during training) with a deliberately different distribution — storm rate 10% vs 35% in training — to test generalisation.
+
+```
+Fresh synthetic batch (N=10K, seed=999)
+       │  feature engineering inline (same logic as gold_features DLT)
+       ▼
+  champion model  →  predictions + probabilities
+       │
+       ▼
+  Threshold gates
+  ├── accuracy      ≥ 0.75   → PASS / FAIL
+  ├── F1-weighted   ≥ 0.73   → PASS / FAIL
+  ├── F1-macro      ≥ 0.65   → PASS / FAIL
+  └── F1-total_loss ≥ 0.55   → PASS / FAIL  ← most business-critical
+       │
+       ├── All pass → ✅ PASS  (model is production-ready)
+       └── Any fail → ❌ FAIL  (job raises exception — pipeline stops)
+
+  Results logged to MLflow experiment as a "validation" run
+```
+
+**How to run:**
+
+```bash
+databricks bundle run insurance_poc_validate_model --target dev
+```
+
+Results appear in the same MLflow experiment (`/Shared/insurance_poc/claim_severity`) alongside training runs, tagged `run_type=validation` for easy filtering.
+
+**Source:** `src/notebooks/mlops/validate_model.py` · **DAB resource:** `resources/jobs/mlops/validate_model_job.yml`
 
 ---
 
