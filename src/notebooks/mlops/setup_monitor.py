@@ -53,7 +53,6 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import (
     MonitorInferenceLog,
     MonitorInferenceLogProblemType,
-    MonitorRefreshInfoTrigger,
 )
 
 w = WorkspaceClient()
@@ -69,7 +68,7 @@ def _get_monitor():
 existing = _get_monitor()
 
 if existing:
-    print(f"Monitor already exists — triggering refresh.")
+    print("Monitor already exists — triggering refresh.")
     refresh = w.quality_monitors.run_refresh(table_name=table_name)
     refresh_id = refresh.refresh_id
     print(f"✓ Refresh triggered  (id: {refresh_id})")
@@ -151,7 +150,7 @@ try:
     )
 except Exception as e:
     print(f"Profile metrics not yet available: {e}")
-    print(f"Re-run this cell after the refresh completes.")
+    print("Re-run this cell after the refresh completes.")
 
 # COMMAND ----------
 # MAGIC %md ### 5. Drift metrics — distribution shift vs previous window
@@ -179,7 +178,7 @@ try:
     )
 except Exception as e:
     print(f"Drift metrics not yet available: {e}")
-    print(f"Drift requires at least 2 time windows — run batch_score multiple times to build history.")
+    print("Drift requires at least 2 time windows — run batch_score multiple times to build history.")
 
 # COMMAND ----------
 # MAGIC %md

@@ -150,7 +150,7 @@ ass_agg = ass_df.groupby("claim_id").agg(
 ).reset_index()
 
 print(f"✓ Generated {n_claims:,} fresh claims  (storm rate: {claims['is_storm_related'].mean():.1%})")
-print(f"  Severity distribution:")
+print("  Severity distribution:")
 for label in severity_labels:
     pct = (claims["severity_label"] == label).mean()
     print(f"    {label:12s}: {pct:.1%}")
@@ -291,7 +291,7 @@ print("=" * 55)
 # MAGIC %md ### 5. Log validation run to MLflow
 
 # COMMAND ----------
-experiment_name = f"/Shared/insurance_poc/claim_severity"
+experiment_name = "/Shared/insurance_poc/claim_severity"
 mlflow.set_experiment(experiment_name)
 
 with mlflow.start_run(run_name=f"validation_seed{seed}_v{model_version}") as run:
