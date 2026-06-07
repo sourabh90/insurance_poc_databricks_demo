@@ -113,7 +113,10 @@ insurance_poc_databricks_demo/
 │   │       └── requirements.txt
 └── resources/
     ├── pipelines/                   # DLT pipeline resource definitions (6 files)
-    ├── jobs/                        # Orchestration job definitions (6 files)
+    ├── jobs/
+    │   ├── pipeline/                # Data orchestration jobs (setup, data_gen, main, fx_rates, cleanup)
+    │   ├── monitoring/              # Ops jobs (sync_system_billing — nightly)
+    │   └── mlops/                   # ML jobs (ml_training_job)
     ├── dashboards/                  # Dashboard resource definitions (2 files)
     ├── alerts/                      # DQ failure alert (daily, emailed to owner)
     └── apps/                        # Databricks Apps resource definitions (2 files)
