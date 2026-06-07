@@ -61,3 +61,5 @@ targets:
       monitoring_catalog: "monitoring_prod"
       bronze_schema:      "raw_claims"
       silver_schema:      "refined_claims"
+      app_service_principal:       ""
+      fraud_app_service_principal: ""
