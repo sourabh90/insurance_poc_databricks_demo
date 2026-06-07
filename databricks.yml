@@ -47,8 +47,8 @@ targets:
       monitoring_catalog:      "monitoring_dev"
       bronze_schema:           "raw_claims"
       silver_schema:           "refined_claims"
-      app_service_principal:        "db0074e0-eada-4248-be2c-ee9635bbb105"
-      fraud_app_service_principal:  "67d0c7c4-29c2-4df1-9e25-7ef23f095efb"
+      app_service_principal:        ""
+      fraud_app_service_principal:  ""
 
   prod:
     mode: production
