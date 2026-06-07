@@ -8,7 +8,7 @@ A production-grade proof-of-concept demonstrating a complete **medallion archite
 - **Streaming ingestion** — Autoloader with schema rescue and lineage tracking
 - **Data quality framework** — Hard blocks (quarantine and drop) and soft warnings (flag and pass), centralised quarantine table
 - **Star schema modelling** — Dimension and fact tables for OLAP queries
-- **ML-ready feature engineering** — Severity prediction and policyholder risk scoring
+- **End-to-end ML pipeline** — Feature engineering (DLT) → LightGBM multi-class classifier → MLflow tracking → Unity Catalog model registry with `champion` alias
 - **BI pre-aggregations** — Summary tables for dashboards and KPI reporting
 - **Declarative infrastructure** — Databricks Asset Bundles (DAB) with `dev` / `prod` targets
 - **Two Streamlit apps** — Billing usage analytics and fraud intelligence dashboard
@@ -46,6 +46,13 @@ Landing Volume (CSV)
                                            (summary_claims_daily, summary_financial_kpis,
                                             summary_fraud_intelligence, summary_triage_performance)
 
+gold_dev.features.claim_features
+       │
+       ▼  (ml_training_job — on-demand)
+  ML Layer               gold_dev.models.claim_severity_classifier
+                         LightGBM multi-class · 36 features · 4 severity classes
+                         Tracked in MLflow · registered in UC with alias: champion
+
 system.billing / system.lakeflow
        │
        ▼  (nightly sync job — sync_system_billing)
@@ -72,6 +79,7 @@ insurance_poc_databricks_demo/
 │   ├── notebooks/
 │   │   ├── setup_catalogs.py        # Creates UC catalogs, schemas, volumes; applies app SP grants
 │   │   ├── generate_synthetic_data.py   # Faker-based data generation (600K+ rows, 3% bad data)
+│   │   ├── train_severity_model.py  # LightGBM training: claim_features → UC model registry
 │   │   ├── sync_system_billing.py   # Nightly sync: system.billing → monitoring_dev
 │   │   ├── ingest_fx_rates.py       # Ingests ECB FX rates into bronze_dev.raw_reference
 │   │   ├── main.py                  # Display catalog tables
@@ -94,14 +102,15 @@ insurance_poc_databricks_demo/
 │   ├── dashboards/
 │   │   ├── insurance_poc_databricks_demo.lvdash.json   # Claims analytics dashboard
 │   │   └── billing_usage.lvdash.json                   # Billing usage dashboard
-│   ├── app/                         # Billing Usage Streamlit app
-│   │   ├── app.py
-│   │   ├── app.yaml
-│   │   └── requirements.txt
-│   └── fraud_app/                   # Fraud Intelligence Streamlit app
-│       ├── app.py
-│       ├── app.yaml
-│       └── requirements.txt
+│   ├── app/
+│   │   ├── billing/                 # Billing Usage Streamlit app
+│   │   │   ├── app.py
+│   │   │   ├── app.yaml
+│   │   │   └── requirements.txt
+│   │   └── fraud/                   # Fraud Intelligence Streamlit app
+│   │       ├── app.py
+│   │       ├── app.yaml
+│   │       └── requirements.txt
 └── resources/
     ├── pipelines/                   # DLT pipeline resource definitions (6 files)
     ├── jobs/                        # Orchestration job definitions (6 files)
@@ -225,6 +234,7 @@ databricks bundle run insurance_poc_databricks_demo_cleanup --target dev
 | `insurance_poc_databricks_demo_job` | Job - 3. Main Orchestration | Runs all 6 DLT pipelines in order | Manual |
 | `insurance_poc_fx_rates` | Job - FX Rates | Ingests ECB FX rates into bronze_dev.raw_reference | Manual |
 | `insurance_poc_sync_system_billing` | Job - Sync System Billing | Replicates system.billing tables to monitoring_dev | Daily 02:00 Europe/London |
+| `insurance_poc_ml_training_job` | Job - ML Severity Model Training | Trains LightGBM classifier on claim_features, registers model in UC | Manual (run after main_job) |
 | `insurance_poc_databricks_demo_cleanup` | Job - Cleanup | Full teardown of catalogs and schemas | Manual |
 
 ---
@@ -295,6 +305,99 @@ databricks apps get fraud-intelligence-dev --output json | grep service_principa
 ```
 
 Then set `app_service_principal` and `fraud_app_service_principal` in the `dev` target of `databricks.yml` and re-run `setup_job`.
+
+---
+
+## ML Use Case — Claim Severity Classifier
+
+### Overview
+
+A **LightGBM multi-class classifier** that predicts the severity of a new claim (minor / moderate / severe / total_loss) based on 36 engineered features covering claim type, policy, policyholder, vehicle, incident conditions, and assessment history. The model is trained on the `claim_features` table produced by the gold features DLT pipeline and registered in Unity Catalog via MLflow.
+
+```
+gold_dev.features.claim_features  (120K rows, 36 features)
+       │
+       ▼  train_severity_model.py
+  LightGBM classifier
+       │
+       ├── MLflow experiment: /Shared/insurance_poc/claim_severity
+       │   └── Run: lgbm_severity_v1
+       │       ├── Params (n_estimators, learning_rate, max_depth, ...)
+       │       ├── Metrics (accuracy, F1 weighted/macro, per-class F1)
+       │       └── Artifacts (classification_report.txt, feature_importance.csv)
+       │
+       └── UC model registry: gold_dev.models.claim_severity_classifier
+           └── alias: champion  →  latest production-ready version
+```
+
+### Feature table — `gold_dev.features.claim_features`
+
+| Feature group | Features | Count |
+|---|---|---|
+| Claim type | `f_type_weather/collision/theft/vandalism/fire` | 5 |
+| Claim attributes | `f_claim_amount_gbp`, `f_fraud_risk_score`, `f_is_storm` | 3 |
+| Policy | `f_excess_gbp`, `f_coverage_limit_gbp`, `f_premium_monthly_gbp`, `f_pol_*` | 6 |
+| Policyholder | `f_ph_age`, `f_driving_years`, `f_driving_points` | 3 |
+| Vehicle | `f_vehicle_age`, `f_vehicle_value_gbp`, `f_mileage_k`, `f_vtype_*` | 5 |
+| Incident | `f_weather_*`, `f_road_*`, `f_visibility_poor`, `f_num_vehicles`, `f_witness_count`, `f_police_report` | 10 |
+| Assessment aggregates | `f_num_assessments`, `f_avg/max_repair_cost_gbp`, `f_total_labour_hours` | 4 |
+| **Total** | | **36** |
+
+**Target**: `severity_encoded` — 0=minor · 1=moderate · 2=severe · 3=total_loss
+
+### Model configuration
+
+| Parameter | Value |
+|---|---|
+| Algorithm | LightGBM (`multiclass`) |
+| `n_estimators` | 400 (with early stopping, patience=50) |
+| `learning_rate` | 0.05 |
+| `max_depth` | 6 · `num_leaves` 63 |
+| `class_weight` | `balanced` (handles imbalanced severity classes) |
+| Train / test split | 80 / 20, stratified |
+
+### MLflow tracking
+
+Every training run logs:
+
+| Artifact | Content |
+|---|---|
+| Params | Full hyperparameter set |
+| `test_accuracy` | Overall accuracy on held-out 20% |
+| `test_f1_weighted` | Weighted F1 across all 4 classes |
+| `test_f1_macro` | Unweighted F1 (penalises imbalanced class performance) |
+| `test_f1_<label>` | Per-class F1 for minor / moderate / severe / total_loss |
+| `best_iteration` | Actual trees used (early stopping) |
+| `classification_report.txt` | Full sklearn classification report |
+| `feature_importance.csv` | All 36 features ranked by LightGBM gain |
+| Model + signature | Logged with input example for schema validation |
+
+### Unity Catalog model registry
+
+The model is registered as `gold_dev.models.claim_severity_classifier`. Each training run creates a new version. The latest version is automatically promoted to the `champion` alias, making it addressable by downstream consumers without hardcoding version numbers:
+
+```python
+import mlflow
+model = mlflow.sklearn.load_model("models:/gold_dev.models.claim_severity_classifier@champion")
+```
+
+### How to run
+
+```bash
+# Run training (requires gold_dev.features.claim_features to exist)
+databricks bundle run insurance_poc_ml_training_job --target dev
+```
+
+The training job also runs automatically as **step 5** of `main_job` after `load_gold_summary`, so the full orchestration always produces an up-to-date model.
+
+### What's next
+
+| Extension | What it adds |
+|---|---|
+| **Model serving endpoint** | Real-time REST API for live claim severity scoring at intake |
+| **Batch inference notebook** | Score all claims nightly, write predictions back to gold as `fact_claim_predictions` |
+| **Model monitoring** | Feature drift detection using Databricks Lakehouse Monitoring on `claim_features` |
+| **Champion/challenger** | A/B routing between model versions via MLflow aliases |
 
 ---
 
@@ -432,6 +535,9 @@ databricks bundle run insurance_poc_databricks_demo_job --target prod
 | Infrastructure | Databricks Asset Bundles |
 | BI Dashboards | Databricks Lakeview |
 | Applications | Streamlit on Databricks Apps (2 apps) |
+| ML training | LightGBM (multi-class classifier) |
+| ML tracking | MLflow (experiment tracking + model registry) |
+| ML registry | Unity Catalog registered models + aliases |
 | Data generation | PySpark + Faker (`en_GB` locale) |
 | CI/CD | GitHub Actions |
 | Linting | Ruff |
