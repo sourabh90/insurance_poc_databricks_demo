@@ -35,8 +35,23 @@ on:
         type: boolean
 
 jobs:
+  deploy:
+    name: Bundle Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Deploy bundle
+        run: databricks bundle deploy --target ${{ inputs.target }} --auto-approve
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
   train:
     name: Train Model
+    needs: [deploy]
     if: ${{ inputs.run_training }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
@@ -54,9 +69,9 @@ jobs:
 
   validate:
     name: Validate Champion Model
-    needs: [train]
+    needs: [deploy, train]
     # runs if validation is enabled AND training either succeeded or was skipped (champion already exists)
-    if: ${{ always() && inputs.run_validation && (needs.train.result == 'success' || needs.train.result == 'skipped') }}
+    if: ${{ always() && inputs.run_validation && needs.deploy.result == 'success' && (needs.train.result == 'success' || needs.train.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
     steps:
