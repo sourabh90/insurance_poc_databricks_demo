@@ -86,7 +86,8 @@ insurance_poc_databricks_demo/
 │   │   ├── monitoring/              # Ops notebooks
 │   │   │   └── sync_system_billing.py   # Nightly sync: system.billing → monitoring_dev
 │   │   └── mlops/                   # ML notebooks
-│   │       └── train_severity_model.py  # LightGBM training: claim_features → UC model registry
+│   │       ├── train_severity_model.py  # LightGBM training: claim_features → UC model registry
+│   │       └── batch_score.py           # Batch inference: champion model → claim_predictions
 │   ├── pipelines/
 │   │   ├── landing_to_bronze.py     # Autoloader: Volume CSV → raw Delta tables
 │   │   ├── bronze_to_silver.py      # Type casting + DQ checks + quarantine
@@ -119,7 +120,7 @@ insurance_poc_databricks_demo/
     ├── jobs/
     │   ├── pipeline/                # Data orchestration jobs (setup, data_gen, main, fx_rates, cleanup)
     │   ├── monitoring/              # Ops jobs (sync_system_billing — nightly)
-    │   └── mlops/                   # ML jobs (ml_training_job)
+    │   └── mlops/                   # ML jobs (ml_training_job, batch_inference_job)
     ├── dashboards/                  # Dashboard resource definitions (2 files)
     ├── alerts/                      # DQ failure alert (daily, emailed to owner)
     └── apps/                        # Databricks Apps resource definitions (2 files)
@@ -241,6 +242,7 @@ databricks bundle run insurance_poc_databricks_demo_cleanup --target dev
 | `insurance_poc_fx_rates` | Job - FX Rates | Ingests ECB FX rates into bronze_dev.raw_reference | Manual |
 | `insurance_poc_sync_system_billing` | Job - Sync System Billing | Replicates system.billing tables to monitoring_dev | Daily 02:00 Europe/London |
 | `insurance_poc_ml_training_job` | Job - ML Severity Model Training | Trains LightGBM classifier on claim_features, registers model in UC | Manual (run after main_job) |
+| `insurance_poc_batch_inference` | Job - Batch Inference (Claim Severity) | Scores all claims with champion model, writes claim_predictions to gold | Manual (run after training) |
 | `insurance_poc_databricks_demo_cleanup` | Job - Cleanup | Full teardown of catalogs and schemas | Manual |
 
 ---
@@ -387,7 +389,7 @@ import mlflow
 model = mlflow.sklearn.load_model("models:/gold_dev.models.claim_severity_classifier@champion")
 ```
 
-### How to run
+### How to run training
 
 ```bash
 # Run training (requires gold_dev.features.claim_features to exist)
@@ -396,12 +398,55 @@ databricks bundle run insurance_poc_ml_training_job --target dev
 
 The training job also runs automatically as **step 5** of `main_job` after `load_gold_summary`, so the full orchestration always produces an up-to-date model.
 
+---
+
+### Batch Inference
+
+Scores all claims in `claim_features` using the `champion` model and writes predictions to `gold_dev.features.claim_predictions`.
+
+```
+gold_dev.features.claim_features  (120K rows)
+       │
+       ▼  Pandas UDF — model broadcast across Spark partitions
+  per-class probabilities  [P(minor), P(moderate), P(severe), P(total_loss)]
+       │
+       ▼
+gold_dev.features.claim_predictions
+  claim_id · severity_label (actual) · predicted_severity_label
+  prob_minor · prob_moderate · prob_severe · prob_total_loss
+  model_version · scored_at
+```
+
+**Why Pandas UDF?** The sklearn model is serialised once, broadcast to every executor, and called per Spark partition — no per-row Python overhead and no repeated registry fetches.
+
+**Output schema:**
+
+| Column | Type | Description |
+|---|---|---|
+| `claim_id` | string | Claim identifier |
+| `severity_encoded` | int | Actual label (0–3) — kept for offline evaluation |
+| `severity_label` | string | Actual label string |
+| `predicted_severity` | int | Predicted class (0=minor … 3=total_loss) |
+| `predicted_severity_label` | string | Predicted label string |
+| `prob_minor` … `prob_total_loss` | double | Per-class probability from `predict_proba` |
+| `model_version` | string | UC model version used — full lineage |
+| `scored_at` | timestamp | Scoring run timestamp |
+
+**How to run:**
+
+```bash
+databricks bundle run insurance_poc_batch_inference --target dev
+```
+
+**Source:** `src/notebooks/mlops/batch_score.py` · **DAB resource:** `resources/jobs/mlops/batch_inference_job.yml`
+
+---
+
 ### What's next
 
 | Extension | What it adds |
 |---|---|
 | **Model serving endpoint** | Real-time REST API for live claim severity scoring at intake |
-| **Batch inference notebook** | Score all claims nightly, write predictions back to gold as `fact_claim_predictions` |
 | **Model monitoring** | Feature drift detection using Databricks Lakehouse Monitoring on `claim_features` |
 | **Champion/challenger** | A/B routing between model versions via MLflow aliases |
 
