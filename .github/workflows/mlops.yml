@@ -35,89 +35,33 @@ on:
         type: boolean
 
 jobs:
-  deploy:
-    name: Bundle Deploy
+  mlops:
+    name: MLOps Pipeline
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: databricks/setup-cli@main
 
       - name: Deploy bundle
         run: databricks bundle deploy --target ${{ inputs.target }} --auto-approve
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-
-  train:
-    name: Train Model
-    needs: [deploy]
-    if: ${{ inputs.run_training }}
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: databricks/setup-cli@main
 
       - name: Train severity model
-        run: |
-          databricks bundle run insurance_poc_ml_training_job \
-            --target ${{ inputs.target }}
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-
-  validate:
-    name: Validate Champion Model
-    needs: [deploy, train]
-    # runs if validation is enabled AND training either succeeded or was skipped (champion already exists)
-    if: ${{ always() && inputs.run_validation && needs.deploy.result == 'success' && (needs.train.result == 'success' || needs.train.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: databricks/setup-cli@main
+        if: ${{ inputs.run_training }}
+        run: databricks bundle run insurance_poc_ml_training_job --target ${{ inputs.target }}
 
       - name: Validate champion model
-        run: |
-          databricks bundle run insurance_poc_validate_model \
-            --target ${{ inputs.target }}
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        if: ${{ inputs.run_validation }}
+        run: databricks bundle run insurance_poc_validate_model --target ${{ inputs.target }}
 
-  inference:
-    name: Batch Inference
-    needs: [validate]
-    if: ${{ always() && inputs.run_inference && (needs.validate.result == 'success' || needs.validate.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: databricks/setup-cli@main
-
-      - name: Score claims with champion model
-        run: |
-          databricks bundle run insurance_poc_batch_inference \
-            --target ${{ inputs.target }}
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-
-  monitor:
-    name: Refresh Monitor
-    needs: [inference]
-    if: ${{ always() && inputs.run_monitoring && (needs.inference.result == 'success' || needs.inference.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: databricks/setup-cli@main
+      - name: Batch inference
+        if: ${{ inputs.run_inference }}
+        run: databricks bundle run insurance_poc_batch_inference --target ${{ inputs.target }}
 
       - name: Refresh Lakehouse Monitor
-        run: |
-          databricks bundle run insurance_poc_setup_monitor \
-            --target ${{ inputs.target }}
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        if: ${{ inputs.run_monitoring }}
+        run: databricks bundle run insurance_poc_setup_monitor --target ${{ inputs.target }}
