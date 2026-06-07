@@ -2,7 +2,10 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature*'
+      - 'feature/**'
   pull_request:
     branches: [main]
 
@@ -66,14 +69,73 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate]
     environment: dev
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature'))
     steps:
       - uses: actions/checkout@v4
 
       - uses: databricks/setup-cli@main
 
+      - name: Bootstrap UC catalogs (dev)
+        run: python3 scripts/bootstrap_catalogs.py --target dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
       - name: Deploy bundle (dev)
-        run: databricks bundle deploy --target dev
+        run: databricks bundle deploy --target dev --auto-approve
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+      - name: Resolve bundle root path
+        id: bundle_root
+        run: |
+          ROOT=$(databricks bundle validate --target dev --output json \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['workspace']['root_path'])")
+          echo "path=${ROOT}" >> "$GITHUB_OUTPUT"
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+      - name: Deploy billing app (dev)
+        run: |
+          STATE=$(databricks apps get databricks-billing-usage-dev --output json \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','STOPPED'))")
+          if [ "$STATE" != "ACTIVE" ]; then
+            databricks apps start databricks-billing-usage-dev
+          fi
+          for i in $(seq 1 18); do
+            DEPLOY_STATE=$(databricks apps get databricks-billing-usage-dev --output json \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('active_deployment',{}).get('status',{}).get('state','NONE'))")
+            if [ "$DEPLOY_STATE" != "IN_PROGRESS" ]; then break; fi
+            echo "Billing app deployment in progress, waiting 10s... ($i/18)"
+            sleep 10
+          done
+          databricks apps deploy databricks-billing-usage-dev \
+            --source-code-path "${{ steps.bundle_root.outputs.path }}/files/src/app/billing"
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+      - name: Deploy fraud intelligence app (dev)
+        run: |
+          STATE=$(databricks apps get fraud-intelligence-dev --output json \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('compute_status',{}).get('state','STOPPED'))")
+          if [ "$STATE" != "ACTIVE" ]; then
+            databricks apps start fraud-intelligence-dev
+          fi
+          for i in $(seq 1 18); do
+            DEPLOY_STATE=$(databricks apps get fraud-intelligence-dev --output json \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('active_deployment',{}).get('status',{}).get('state','NONE'))")
+            if [ "$DEPLOY_STATE" != "IN_PROGRESS" ]; then break; fi
+            echo "Fraud app deployment in progress, waiting 10s... ($i/18)"
+            sleep 10
+          done
+          databricks apps deploy fraud-intelligence-dev \
+            --source-code-path "${{ steps.bundle_root.outputs.path }}/files/src/app/fraud"
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

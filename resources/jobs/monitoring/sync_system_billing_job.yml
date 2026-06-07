@@ -1,0 +1,18 @@
+resources:
+  jobs:
+    insurance_poc_sync_system_billing:
+      name: "[${bundle.target}] insurance_poc - Job - Sync System Billing"
+      tasks:
+        - task_key: sync_system_billing
+          notebook_task:
+            notebook_path: ../../../src/notebooks/monitoring/sync_system_billing.py
+            base_parameters:
+              monitoring_catalog:    ${var.monitoring_catalog}
+              app_service_principal: ${var.app_service_principal}
+      schedule:
+        quartz_cron_expression: "0 0 2 * * ?"
+        timezone_id: "Europe/London"
+        pause_status: UNPAUSED
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

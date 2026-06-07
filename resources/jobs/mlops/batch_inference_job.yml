@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    insurance_poc_batch_inference:
+      name: "[${bundle.target}] insurance_poc - Job - Batch Inference (Claim Severity)"
+      tasks:
+        - task_key: batch_score_claims
+          max_retries: 1
+          notebook_task:
+            notebook_path: ../../../src/notebooks/mlops/batch_score.py
+            base_parameters:
+              gold_catalog:   ${var.gold_catalog}
+              ml_model_name:  ${var.ml_model_name}
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"

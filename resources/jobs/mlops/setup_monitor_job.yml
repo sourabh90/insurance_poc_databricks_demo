@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    insurance_poc_setup_monitor:
+      name: "[${bundle.target}] insurance_poc - Job - Setup / Refresh Monitor"
+      tasks:
+        - task_key: setup_monitor
+          max_retries: 1
+          notebook_task:
+            notebook_path: ../../../src/notebooks/mlops/setup_monitor.py
+            base_parameters:
+              gold_catalog:  ${var.gold_catalog}
+              wait_minutes:  "10"
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"
