@@ -88,7 +88,8 @@ insurance_poc_databricks_demo/
 │   │   └── mlops/                   # ML notebooks
 │   │       ├── train_severity_model.py  # LightGBM training: claim_features → UC model registry
 │   │       ├── batch_score.py           # Batch inference: champion model → claim_predictions
-│   │       └── validate_model.py        # Validation: fresh synthetic batch + threshold gates
+│   │       ├── validate_model.py        # Validation: fresh synthetic batch + threshold gates
+│   │       └── setup_monitor.py         # Lakehouse Monitor setup / refresh on claim_predictions
 │   ├── pipelines/
 │   │   ├── landing_to_bronze.py     # Autoloader: Volume CSV → raw Delta tables
 │   │   ├── bronze_to_silver.py      # Type casting + DQ checks + quarantine
@@ -121,7 +122,7 @@ insurance_poc_databricks_demo/
     ├── jobs/
     │   ├── pipeline/                # Data orchestration jobs (setup, data_gen, main, fx_rates, cleanup)
     │   ├── monitoring/              # Ops jobs (sync_system_billing — nightly)
-    │   └── mlops/                   # ML jobs (ml_training_job, batch_inference_job, validate_model_job)
+    │   └── mlops/                   # ML jobs (ml_training_job, batch_inference_job, validate_model_job, setup_monitor_job)
     ├── dashboards/                  # Dashboard resource definitions (2 files)
     ├── alerts/                      # DQ failure alert (daily, emailed to owner)
     └── apps/                        # Databricks Apps resource definitions (2 files)
@@ -245,6 +246,7 @@ databricks bundle run insurance_poc_databricks_demo_cleanup --target dev
 | `insurance_poc_ml_training_job` | Job - ML Severity Model Training | Trains LightGBM classifier on claim_features, registers model in UC | Manual (run after main_job) |
 | `insurance_poc_batch_inference` | Job - Batch Inference (Claim Severity) | Scores all claims with champion model, writes claim_predictions to gold | Manual (run after training) |
 | `insurance_poc_validate_model` | Job - Validate Champion Model | Fresh synthetic batch validation with threshold gates, logged to MLflow | Manual (run after training) |
+| `insurance_poc_setup_monitor` | Job - Setup / Refresh Monitor | Creates Lakehouse Monitor on claim_predictions; idempotent (refresh if exists) | Manual (run after each batch score) |
 | `insurance_poc_databricks_demo_cleanup` | Job - Cleanup | Full teardown of catalogs and schemas | Manual |
 
 ---
@@ -481,12 +483,70 @@ Results appear in the same MLflow experiment (`/Shared/insurance_poc/claim_sever
 
 ---
 
+---
+
+### Model Monitoring
+
+Uses **Databricks Lakehouse Monitoring** (InferenceLog type) to track model accuracy and prediction drift over time across batch scoring runs.
+
+```
+claim_predictions  (scored_at, predicted_severity, severity_encoded, model_version)
+       │
+       ▼  Lakehouse Monitor — daily + weekly windows
+       │
+       ├── gold_dev.monitoring.claim_predictions_profile_metrics
+       │       column stats per window (mean, stddev, % nulls, histogram)
+       │       sliced by: predicted_severity_label · model_version
+       │
+       └── gold_dev.monitoring.claim_predictions_drift_metrics
+               drift scores vs previous window
+               (JS distance, KL divergence, chi-squared)
+               drift_detected flag per column
+```
+
+**Drift thresholds (JS distance):**
+
+| Range | Meaning | Action |
+|---|---|---|
+| < 0.05 | No drift | No action |
+| 0.05 – 0.10 | Mild drift | Monitor closely |
+| > 0.10 | Significant drift | Consider retraining |
+
+**How to run:**
+
+```bash
+# First time — creates the monitor and triggers initial refresh
+databricks bundle run insurance_poc_setup_monitor --target dev
+
+# After each batch_score run — triggers a fresh refresh
+databricks bundle run insurance_poc_setup_monitor --target dev
+```
+
+The monitor dashboard is also accessible via **Catalog Explorer → `claim_predictions` → Quality tab**.
+
+> **Note:** Drift metrics require at least 2 time windows of data. Run `batch_score` multiple times (different batches with different `scored_at` timestamps) to build history for meaningful drift detection.
+
+**Recommended MLOps workflow:**
+```
+train  →  validate  →  batch_score  →  refresh monitor
+                             │
+                        next day / next batch
+                             │
+                        batch_score  →  refresh monitor
+                             │              │
+                             │         drift detected?
+                             │              └── retrain → validate → promote
+```
+
+**Source:** `src/notebooks/mlops/setup_monitor.py` · **DAB resource:** `resources/jobs/mlops/setup_monitor_job.yml`
+
+---
+
 ### What's next
 
 | Extension | What it adds |
 |---|---|
 | **Model serving endpoint** | Real-time REST API for live claim severity scoring at intake |
-| **Model monitoring** | Feature drift detection using Databricks Lakehouse Monitoring on `claim_features` |
 | **Champion/challenger** | A/B routing between model versions via MLflow aliases |
 
 ---
